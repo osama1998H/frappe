@@ -13,8 +13,7 @@ from frappe.utils import cint
 
 
 def apply():
-	rate_limit = frappe.conf.rate_limit
-	if rate_limit:
+	if rate_limit := frappe.conf.rate_limit:
 		frappe.local.rate_limiter = RateLimiter(rate_limit["limit"], rate_limit["window"])
 		frappe.local.rate_limiter.apply()
 
@@ -121,7 +120,7 @@ def rate_limit(
 
 			_limit = limit() if callable(limit) else limit
 
-			ip = frappe.local.request_ip if ip_based is True else None
+			ip = frappe.local.request_ip if ip_based else None
 
 			user_key = frappe.form_dict[key] if key else None
 

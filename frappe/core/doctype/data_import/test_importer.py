@@ -142,14 +142,14 @@ class TestImporter(FrappeTestCase):
 def create_doctype_if_not_exists(doctype_name, force=False):
 	if force:
 		frappe.delete_doc_if_exists("DocType", doctype_name)
-		frappe.delete_doc_if_exists("DocType", "Child 1 of " + doctype_name)
-		frappe.delete_doc_if_exists("DocType", "Child 2 of " + doctype_name)
+		frappe.delete_doc_if_exists("DocType", f"Child 1 of {doctype_name}")
+		frappe.delete_doc_if_exists("DocType", f"Child 2 of {doctype_name}")
 
 	if frappe.db.exists("DocType", doctype_name):
 		return
 
 	# Child Table 1
-	table_1_name = "Child 1 of " + doctype_name
+	table_1_name = f"Child 1 of {doctype_name}"
 	frappe.get_doc(
 		{
 			"doctype": "DocType",
@@ -168,7 +168,7 @@ def create_doctype_if_not_exists(doctype_name, force=False):
 	).insert()
 
 	# Child Table 2
-	table_2_name = "Child 2 of " + doctype_name
+	table_2_name = f"Child 2 of {doctype_name}"
 	frappe.get_doc(
 		{
 			"doctype": "DocType",
@@ -230,7 +230,7 @@ def create_doctype_if_not_exists(doctype_name, force=False):
 
 
 def get_import_file(csv_file_name, force=False):
-	file_name = csv_file_name + ".csv"
+	file_name = f"{csv_file_name}.csv"
 	_file = frappe.db.exists("File", {"file_name": file_name})
 	if force and _file:
 		frappe.delete_doc_if_exists("File", _file)

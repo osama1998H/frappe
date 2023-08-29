@@ -50,10 +50,7 @@ def get_user_default_as_list(key, user=None):
 
 	d = list(filter(None, (not isinstance(d, (list, tuple))) and [d] or d))
 
-	# filter default values if not found in user permission
-	values = [value for value in d if not not_in_user_permission(key, value)]
-
-	return values
+	return [value for value in d if not not_in_user_permission(key, value)]
 
 
 def is_a_user_permission_key(key):
@@ -71,7 +68,7 @@ def not_in_user_permission(key, value, user=None):
 			return False
 
 	# return true only if user_permission exists
-	return True if user_permission else False
+	return bool(user_permission)
 
 
 def get_user_permissions(user=None):
@@ -136,14 +133,13 @@ def set_default(key, value, parent, parenttype="__default"):
 	:param parent: Usually, **User** to whom the default belongs.
 	:param parenttype: [optional] default is `__default`."""
 	table = DocType("DefaultValue")
-	key_exists = (
+	if key_exists := (
 		frappe.qb.from_(table)
 		.where((table.defkey == key) & (table.parent == parent))
 		.select(table.defkey)
 		.for_update()
 		.run()
-	)
-	if key_exists:
+	):
 		frappe.db.delete("DefaultValue", {"defkey": key, "parent": parent})
 	if value is not None:
 		add_default(key, value, parent)
@@ -178,20 +174,20 @@ def clear_default(key=None, value=None, parent=None, name=None, parenttype=None)
 	filters = {}
 
 	if name:
-		filters.update({"name": name})
+		filters["name"] = name
 
 	else:
 		if key:
-			filters.update({"defkey": key})
+			filters["defkey"] = key
 
 		if value:
-			filters.update({"defvalue": value})
+			filters["defvalue"] = value
 
 		if parent:
-			filters.update({"parent": parent})
+			filters["parent"] = parent
 
 		if parenttype:
-			filters.update({"parenttype": parenttype})
+			filters["parenttype"] = parenttype
 
 	if parent:
 		clear_defaults_cache(parent)

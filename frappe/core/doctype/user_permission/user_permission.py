@@ -27,7 +27,7 @@ class UserPermission(Document):
 	def validate_user_permission(self):
 		"""checks for duplicate user permission records"""
 
-		duplicate_exists = frappe.get_all(
+		if duplicate_exists := frappe.get_all(
 			self.doctype,
 			filters={
 				"allow": self.allow,
@@ -38,8 +38,7 @@ class UserPermission(Document):
 				"name": ["!=", self.name],
 			},
 			limit=1,
-		)
-		if duplicate_exists:
+		):
 			frappe.throw(_("User permission already exists"), frappe.DuplicateEntryError)
 
 	def validate_default_permission(self):
@@ -121,15 +120,14 @@ def get_user_permissions(user=None):
 
 def user_permission_exists(user, allow, for_value, applicable_for=None):
 	"""Checks if similar user permission already exists"""
-	user_permissions = get_user_permissions(user).get(allow, [])
-	if not user_permissions:
+	if user_permissions := get_user_permissions(user).get(allow, []):
+		return find(
+			user_permissions,
+			lambda perm: perm["doc"] == for_value
+			and perm.get("applicable_for") == applicable_for,
+		)
+	else:
 		return None
-	has_same_user_permission = find(
-		user_permissions,
-		lambda perm: perm["doc"] == for_value and perm.get("applicable_for") == applicable_for,
-	)
-
-	return has_same_user_permission
 
 
 @frappe.whitelist()
@@ -140,8 +138,7 @@ def get_applicable_for_doctype_list(doctype, txt, searchfield, start, page_len, 
 	linked_doctypes = []
 	for linked_doctype, linked_doctype_values in linked_doctypes_map.items():
 		linked_doctypes.append(linked_doctype)
-		child_doctype = linked_doctype_values.get("child_doctype")
-		if child_doctype:
+		if child_doctype := linked_doctype_values.get("child_doctype"):
 			linked_doctypes.append(child_doctype)
 
 	linked_doctypes += [doctype]
@@ -151,11 +148,7 @@ def get_applicable_for_doctype_list(doctype, txt, searchfield, start, page_len, 
 
 	linked_doctypes.sort()
 
-	return_list = []
-	for doctype in linked_doctypes[start:page_len]:
-		return_list.append([doctype])
-
-	return return_list
+	return [[doctype] for doctype in linked_doctypes[start:page_len]]
 
 
 def get_permitted_documents(doctype):
@@ -172,7 +165,7 @@ def get_permitted_documents(doctype):
 def check_applicable_doc_perm(user, doctype, docname):
 	frappe.only_for("System Manager")
 	applicable = []
-	doc_exists = frappe.get_all(
+	if doc_exists := frappe.get_all(
 		"User Permission",
 		fields=["name"],
 		filters={
@@ -182,8 +175,7 @@ def check_applicable_doc_perm(user, doctype, docname):
 			"apply_to_all_doctypes": 1,
 		},
 		limit=1,
-	)
-	if doc_exists:
+	):
 		applicable = get_linked_doctypes(doctype).keys()
 	else:
 		data = frappe.get_all(
@@ -249,16 +241,7 @@ def add_user_permissions(data):
 			perm_applied_docs, data.applicable_doctypes, data.user, data.doctype, data.docname
 		)
 		for applicable in data.applicable_doctypes:
-			if applicable not in perm_applied_docs:
-				insert_user_perm(
-					data.user,
-					data.doctype,
-					data.docname,
-					data.is_default,
-					data.hide_descendants,
-					applicable=applicable,
-				)
-			elif exists:
+			if applicable not in perm_applied_docs or exists:
 				insert_user_perm(
 					data.user,
 					data.doctype,

@@ -239,7 +239,7 @@ def confirmed_unsubscribe(email, group):
 
 @frappe.whitelist(allow_guest=True)
 @rate_limit(limit=10, seconds=60 * 60)
-def subscribe(email, email_group=None):  # noqa
+def subscribe(email, email_group=None):	# noqa
 	"""API endpoint to subscribe an email to a particular email group. Triggers a confirmation email."""
 
 	if email_group is None:
@@ -252,13 +252,9 @@ def subscribe(email, email_group=None):  # noqa
 	signed_params = get_signed_params({"email": email, "email_group": email_group})
 	confirm_subscription_url = f"{api_endpoint}?{signed_params}"
 
-	# fetch custom template if available
-	email_confirmation_template = frappe.db.get_value(
+	if email_confirmation_template := frappe.db.get_value(
 		"Email Group", email_group, "confirmation_email_template"
-	)
-
-	# build email and send
-	if email_confirmation_template:
+	):
 		args = {"email": email, "confirmation_url": confirm_subscription_url, "email_group": email_group}
 		email_template = frappe.get_doc("Email Template", email_confirmation_template)
 		email_subject = email_template.subject

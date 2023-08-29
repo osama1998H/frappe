@@ -47,7 +47,7 @@ class DocumentNamingSettings(Document):
 				frappe.msgprint(_("Unable to find DocType {0}").format(d))
 				continue
 
-		custom_templates = frappe.get_all(
+		if custom_templates := frappe.get_all(
 			"DocType",
 			fields=["autoname"],
 			filters={
@@ -55,8 +55,7 @@ class DocumentNamingSettings(Document):
 				"autoname": ("like", "%.#%"),
 				"module": ("not in", ["Core"]),
 			},
-		)
-		if custom_templates:
+		):
 			series_templates.update([d.autoname.rsplit(".", 1)[0] for d in custom_templates])
 
 		return self._evaluate_and_clean_templates(series_templates)

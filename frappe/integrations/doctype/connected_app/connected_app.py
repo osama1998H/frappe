@@ -24,9 +24,7 @@ class ConnectedApp(Document):
 
 	def validate(self):
 		base_url = frappe.utils.get_url()
-		callback_path = (
-			"/api/method/frappe.integrations.doctype.connected_app.connected_app.callback/" + self.name
-		)
+		callback_path = f"/api/method/frappe.integrations.doctype.connected_app.connected_app.callback/{self.name}"
 		self.redirect_uri = urljoin(base_url, callback_path)
 
 	def get_oauth2_session(self, user=None, init=False):
@@ -41,8 +39,7 @@ class ConnectedApp(Document):
 			token = token_cache.get_json()
 			token_updater = token_cache.update_data
 			auto_refresh_kwargs = {"client_id": self.client_id}
-			client_secret = self.get_password("client_secret")
-			if client_secret:
+			if client_secret := self.get_password("client_secret"):
 				auto_refresh_kwargs["client_secret"] = client_secret
 
 		return OAuth2Session(
@@ -79,9 +76,7 @@ class ConnectedApp(Document):
 	def get_user_token(self, user=None, success_uri=None):
 		"""Return an existing user token or initiate a Web Application Flow."""
 		user = user or frappe.session.user
-		token_cache = self.get_token_cache(user)
-
-		if token_cache:
+		if token_cache := self.get_token_cache(user):
 			return token_cache
 
 		redirect = self.initiate_web_application_flow(user, success_uri)
@@ -90,13 +85,13 @@ class ConnectedApp(Document):
 		return redirect
 
 	def get_token_cache(self, user):
-		token_cache = None
-		token_cache_name = self.name + "-" + user
+		token_cache_name = f"{self.name}-{user}"
 
-		if frappe.db.exists("Token Cache", token_cache_name):
-			token_cache = frappe.get_doc("Token Cache", token_cache_name)
-
-		return token_cache
+		return (
+			frappe.get_doc("Token Cache", token_cache_name)
+			if frappe.db.exists("Token Cache", token_cache_name)
+			else None
+		)
 
 	def get_scopes(self):
 		return [row.scope for row in self.scopes]
@@ -143,7 +138,9 @@ def callback(code=None, state=None):
 		frappe.throw(_("Invalid Parameters."))
 
 	connected_app = frappe.get_doc("Connected App", path[3])
-	token_cache = frappe.get_doc("Token Cache", connected_app.name + "-" + frappe.session.user)
+	token_cache = frappe.get_doc(
+		"Token Cache", f"{connected_app.name}-{frappe.session.user}"
+	)
 
 	if state != token_cache.state:
 		frappe.throw(_("Invalid state."))

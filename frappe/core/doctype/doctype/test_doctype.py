@@ -168,8 +168,7 @@ class TestDocType(FrappeTestCase):
 				"mandatory_depends_on",
 				"read_only_depends_on",
 			]:
-				condition = field.get(depends_on)
-				if condition:
+				if condition := field.get(depends_on):
 					self.assertFalse(re.match(pattern, condition))
 
 	def test_sync_field_order(self):

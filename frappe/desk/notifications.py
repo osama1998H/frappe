@@ -40,7 +40,7 @@ def get_notifications():
 	notification_percent = {}
 
 	for name in groups:
-		count = cache.hget("notification_count:" + name, frappe.session.user)
+		count = cache.hget(f"notification_count:{name}", frappe.session.user)
 		if count is not None:
 			notification_count[name] = count
 
@@ -57,11 +57,11 @@ def get_notifications_for_doctypes(config, notification_count):
 
 	for d in config.for_doctype:
 		if d in can_read:
-			condition = config.for_doctype[d]
-
 			if d in notification_count:
 				open_count_doctype[d] = notification_count[d]
 			else:
+				condition = config.for_doctype[d]
+
 				try:
 					if isinstance(condition, dict):
 						result = frappe.get_list(
@@ -72,8 +72,7 @@ def get_notifications_for_doctypes(config, notification_count):
 
 				except frappe.PermissionError:
 					frappe.clear_messages()
-					pass
-					# frappe.msgprint("Permission Error in notifications for {0}".format(d))
+									# frappe.msgprint("Permission Error in notifications for {0}".format(d))
 
 				except Exception as e:
 					# OperationalError: (1412, 'Table definition has changed, please retry transaction')
@@ -83,7 +82,7 @@ def get_notifications_for_doctypes(config, notification_count):
 
 				else:
 					open_count_doctype[d] = result
-					frappe.cache().hset("notification_count:" + d, frappe.session.user, result)
+					frappe.cache().hset(f"notification_count:{d}", frappe.session.user, result)
 
 	return open_count_doctype
 
@@ -122,7 +121,6 @@ def get_notifications_for_targets(config, notification_percent):
 
 				except frappe.PermissionError:
 					frappe.clear_messages()
-					pass
 				except Exception as e:
 					if e.args[0] not in (1412, 1684):
 						raise
@@ -151,9 +149,9 @@ def clear_notifications(user=None):
 
 	for name in groups:
 		if user:
-			cache.hdel("notification_count:" + name, user)
+			cache.hdel(f"notification_count:{name}", user)
 		else:
-			cache.delete_key("notification_count:" + name)
+			cache.delete_key(f"notification_count:{name}")
 
 
 def clear_notification_config(user):
@@ -161,18 +159,14 @@ def clear_notification_config(user):
 
 
 def delete_notification_count_for(doctype):
-	frappe.cache().delete_key("notification_count:" + doctype)
+	frappe.cache().delete_key(f"notification_count:{doctype}")
 
 
 def clear_doctype_notifications(doc, method=None, *args, **kwargs):
 	config = get_notification_config()
 	if not config:
 		return
-	if isinstance(doc, str):
-		doctype = doc  # assuming doctype name was passed directly
-	else:
-		doctype = doc.doctype
-
+	doctype = doc if isinstance(doc, str) else doc.doctype
 	if doctype in config.for_doctype:
 		delete_notification_count_for(doctype)
 		return
@@ -237,9 +231,7 @@ def get_filters_for(doctype):
 	"""get open filters for doctype"""
 	config = get_notification_config()
 	doctype_config = config.get("for_doctype").get(doctype, {})
-	filters = doctype_config if not isinstance(doctype_config, str) else None
-
-	return filters
+	return doctype_config if not isinstance(doctype_config, str) else None
 
 
 @frappe.whitelist()

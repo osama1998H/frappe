@@ -61,15 +61,12 @@ def get_data(filters):
 
 def get_reference_addresses_and_contact(reference_doctype, reference_name):
 	data = []
-	filters = None
 	reference_details = frappe._dict()
 
 	if not reference_doctype:
 		return []
 
-	if reference_name:
-		filters = {"name": reference_name}
-
+	filters = {"name": reference_name} if reference_name else None
 	reference_list = [
 		d[0] for d in frappe.get_list(reference_doctype, filters=filters, fields=["name"], as_list=True)
 	]
@@ -115,11 +112,7 @@ def get_reference_details(reference_doctype, doctype, reference_list, reference_
 	fields = ["`tabDynamic Link`.link_name"] + field_map.get(doctype, [])
 
 	records = frappe.get_list(doctype, filters=filters, fields=fields, as_list=True)
-	temp_records = list()
-
-	for d in records:
-		temp_records.append(d[1:])
-
+	temp_records = [d[1:] for d in records]
 	if not reference_list:
 		frappe.throw(_("No records present in {0}").format(reference_doctype))
 
@@ -128,4 +121,4 @@ def get_reference_details(reference_doctype, doctype, reference_list, reference_
 
 
 def add_blank_columns_for(doctype):
-	return ["" for field in field_map.get(doctype, [])]
+	return ["" for _ in field_map.get(doctype, [])]

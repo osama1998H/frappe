@@ -51,23 +51,23 @@ class DBTable:
 		ret = []
 		for k in list(self.columns):
 			if k not in column_list:
-				d = self.columns[k].get_definition()
-				if d:
-					ret.append("`" + k + "` " + d)
+				if d := self.columns[k].get_definition():
+					ret.append(f"`{k}` {d}")
 					column_list.append(k)
 		return ret
 
 	def get_index_definitions(self):
-		ret = []
-		for key, col in self.columns.items():
+		return [
+			f"index `{key}`(`{key}`)"
+			for key, col in self.columns.items()
 			if (
 				col.set_index
 				and not col.unique
 				and col.fieldtype in frappe.db.type_map
-				and frappe.db.type_map.get(col.fieldtype)[0] not in ("text", "longtext")
-			):
-				ret.append("index `" + key + "`(`" + key + "`)")
-		return ret
+				and frappe.db.type_map.get(col.fieldtype)[0]
+				not in ("text", "longtext")
+			)
+		]
 
 	def get_columns_from_docfields(self):
 		"""
@@ -246,9 +246,9 @@ class DbColumn:
 		# default
 		if (
 			self.default_changed(current_def)
-			and (self.default not in frappe.db.DEFAULT_SHORTCUTS)
+			and self.default not in frappe.db.DEFAULT_SHORTCUTS
 			and not cstr(self.default).startswith(":")
-			and not (column_type in ["text", "longtext"])
+			and column_type not in ["text", "longtext"]
 		):
 			self.table.set_default.append(self)
 
@@ -256,30 +256,30 @@ class DbColumn:
 		if (current_def["index"] and not self.set_index) and column_type not in ("text", "longtext"):
 			self.table.drop_index.append(self)
 
-		elif (not current_def["index"] and self.set_index) and not (column_type in ("text", "longtext")):
+		elif (not current_def["index"] and self.set_index) and column_type not in (
+			"text",
+			"longtext",
+		):
 			self.table.add_index.append(self)
 
 	def default_changed(self, current_def):
 		if "decimal" in current_def["type"]:
 			return self.default_changed_for_decimal(current_def)
-		else:
-			cur_default = current_def["default"]
-			new_default = self.default
-			if cur_default == "NULL" or cur_default is None:
-				cur_default = None
-			else:
-				# Strip quotes from default value
-				# eg. database returns default value as "'System Manager'"
-				cur_default = cur_default.lstrip("'").rstrip("'")
-
-			fieldtype = self.fieldtype
-			if fieldtype in ["Int", "Check"]:
-				cur_default = cint(cur_default)
-				new_default = cint(new_default)
-			elif fieldtype in ["Currency", "Float", "Percent"]:
-				cur_default = flt(cur_default)
-				new_default = flt(new_default)
-			return cur_default != new_default
+		cur_default = current_def["default"]
+		new_default = self.default
+		cur_default = (
+			None
+			if cur_default == "NULL" or cur_default is None
+			else cur_default.lstrip("'").rstrip("'")
+		)
+		fieldtype = self.fieldtype
+		if fieldtype in ["Int", "Check"]:
+			cur_default = cint(cur_default)
+			new_default = cint(new_default)
+		elif fieldtype in ["Currency", "Float", "Percent"]:
+			cur_default = flt(cur_default)
+			new_default = flt(new_default)
+		return cur_default != new_default
 
 	def default_changed_for_decimal(self, current_def):
 		try:
@@ -343,14 +343,8 @@ def get_definition(fieldtype, precision=None, length=None):
 			size = "21,9"
 
 		if length:
-			if coltype == "varchar":
+			if coltype == "varchar" or coltype == "int" and length < 11:
 				size = length
-			elif coltype == "int" and length < 11:
-				# allow setting custom length for int if length provided is less than 11
-				# NOTE: this will only be applicable for mariadb as frappe implements int
-				# in postgres as bigint (as seen in type_map)
-				size = length
-
 	if size is not None:
 		coltype = f"{coltype}({size})"
 
@@ -366,11 +360,7 @@ def add_column(
 
 	frappe.db.commit()
 
-	query = "alter table `tab{}` add column {} {}".format(
-		doctype,
-		column_name,
-		get_definition(fieldtype, precision, length),
-	)
+	query = f"alter table `tab{doctype}` add column {column_name} {get_definition(fieldtype, precision, length)}"
 
 	if not_null:
 		query += " not null"

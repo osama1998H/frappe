@@ -120,8 +120,10 @@ class DataExporter:
 
 		if self.all_doctypes:
 			self.child_doctypes = []
-			for df in frappe.get_meta(self.doctype).get_table_fields():
-				self.child_doctypes.append(dict(doctype=df.options, parentfield=df.fieldname))
+			self.child_doctypes.extend(
+				dict(doctype=df.options, parentfield=df.fieldname)
+				for df in frappe.get_meta(self.doctype).get_table_fields()
+			)
 
 	def build_response(self):
 		self.writer = UnicodeWriter()
@@ -209,7 +211,7 @@ class DataExporter:
 
 		# build list of valid docfields
 		tablecolumns = []
-		table_name = "tab" + dt
+		table_name = f"tab{dt}"
 		for f in frappe.db.get_table_columns_description(table_name):
 			field = meta.get_field(f.name)
 			if field and (
@@ -313,7 +315,7 @@ class DataExporter:
 			else:
 				return _("One of") + ": %s" % ", ".join(filter(None, docfield.options.split("\n")))
 		elif docfield.fieldtype == "Link":
-			return "Valid %s" % docfield.options
+			return f"Valid {docfield.options}"
 		elif docfield.fieldtype == "Int":
 			return "Integer"
 		elif docfield.fieldtype == "Check":
@@ -414,9 +416,7 @@ class DataExporter:
 			rows.append([""] * (len(self.columns) + 1))
 		row = rows[rowidx]
 
-		_column_start_end = self.column_start_end.get((dt, parentfield))
-
-		if _column_start_end:
+		if _column_start_end := self.column_start_end.get((dt, parentfield)):
 			for i, c in enumerate(self.columns[_column_start_end.start : _column_start_end.end]):
 				df = meta.get_field(c)
 				fieldtype = df.fieldtype if df else "Data"
@@ -438,11 +438,10 @@ class DataExporter:
 		filename = frappe.generate_hash(length=10)
 		with open(filename, "wb") as f:
 			f.write(cstr(self.writer.getvalue()).encode("utf-8"))
-		f = open(filename)
-		reader = csv.reader(f)
-		xlsx_file = make_xlsx(reader, "Data Import Template" if self.template else "Data Export")
+		with open(filename) as f:
+			reader = csv.reader(f)
+			xlsx_file = make_xlsx(reader, "Data Import Template" if self.template else "Data Export")
 
-		f.close()
 		os.remove(filename)
 
 		provide_binary_file(self.doctype, "xlsx", xlsx_file.getvalue())

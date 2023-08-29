@@ -322,8 +322,7 @@ class TestFile(FrappeTestCase):
 		move_file([{"name": folder.name}], "Home/Test Folder 1", folder.folder)
 
 		file = frappe.get_doc("File", {"file_name": "folder_copy.txt"})
-		file_copy_txt = frappe.get_value("File", {"file_name": "file_copy.txt"})
-		if file_copy_txt:
+		if file_copy_txt := frappe.get_value("File", {"file_name": "file_copy.txt"}):
 			frappe.get_doc("File", file_copy_txt).delete()
 
 		self.assertEqual(_("Home/Test Folder 1/Test Folder 3"), file.folder)

@@ -17,7 +17,7 @@ doctypes_for_mapping = {
 
 
 def get_doctype_map_key(doctype):
-	return frappe.scrub(doctype) + "_map"
+	return f"{frappe.scrub(doctype)}_map"
 
 
 doctype_map_keys = tuple(map(get_doctype_map_key, doctypes_for_mapping))
@@ -87,7 +87,7 @@ def clear_user_cache(user=None):
 	if user:
 		for name in user_cache_keys:
 			cache.hdel(name, user)
-		cache.delete_keys("user:" + user)
+		cache.delete_keys(f"user:{user}")
 		clear_defaults_cache(user)
 	else:
 		for name in user_cache_keys:
@@ -174,7 +174,7 @@ def get_doctype_map(doctype, name, filters=None, order_by=None):
 
 
 def clear_doctype_map(doctype, name):
-	frappe.cache().hdel(frappe.scrub(doctype) + "_map", name)
+	frappe.cache().hdel(f"{frappe.scrub(doctype)}_map", name)
 
 
 def build_table_count_cache():

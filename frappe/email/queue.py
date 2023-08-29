@@ -86,14 +86,14 @@ def get_unsubcribed_url(
 		"name": reference_name.encode("utf-8"),
 	}
 	if unsubscribe_params:
-		params.update(unsubscribe_params)
+		params |= unsubscribe_params
 
 	query_string = get_signed_params(params)
 
 	# for test
 	frappe.local.flags.signed_query_string = query_string
 
-	return get_url(unsubscribe_method + "?" + get_signed_params(params))
+	return get_url(f"{unsubscribe_method}?{get_signed_params(params)}")
 
 
 @frappe.whitelist(allow_guest=True)

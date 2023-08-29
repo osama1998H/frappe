@@ -20,7 +20,7 @@ def execute(filters=None):
 	data = frappe.get_list(doctype, fields=fields, as_list=True, user=user)
 
 	if show_permissions:
-		columns = columns + [frappe.unscrub(right) + ":Check:80" for right in rights]
+		columns = columns + [f"{frappe.unscrub(right)}:Check:80" for right in rights]
 		data = list(data)
 		for i, doc in enumerate(data):
 			permission = frappe.permissions.get_doc_permissions(frappe.get_doc(doctype, doc[0]), user)
@@ -55,9 +55,9 @@ def query_doctypes(doctype, txt, searchfield, start, page_len, filters):
 
 	single_doctypes = [d[0] for d in frappe.db.get_values("DocType", {"issingle": 1})]
 
-	out = []
-	for dt in can_read:
-		if txt.lower().replace("%", "") in dt.lower() and dt not in single_doctypes:
-			out.append([dt])
-
-	return out
+	return [
+		[dt]
+		for dt in can_read
+		if txt.lower().replace("%", "") in dt.lower()
+		and dt not in single_doctypes
+	]

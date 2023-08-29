@@ -59,7 +59,7 @@ class ScheduledJobType(Document):
 			"Daily Long": "0 0 * * *",
 			"Hourly": "0 * * * *",
 			"Hourly Long": "0 * * * *",
-			"All": "0/" + str((frappe.get_conf().scheduler_interval or 240) // 60) + " * * * *",
+			"All": f"0/{str((frappe.get_conf().scheduler_interval or 240) // 60)} * * * *",
 		}
 
 		if not self.cron_format:
@@ -74,8 +74,7 @@ class ScheduledJobType(Document):
 		try:
 			self.log_status("Start")
 			if self.server_script:
-				script_name = frappe.db.get_value("Server Script", self.server_script)
-				if script_name:
+				if script_name := frappe.db.get_value("Server Script", self.server_script):
 					frappe.get_doc("Server Script", script_name).execute_scheduled_method()
 			else:
 				frappe.get_attr(self.method)()

@@ -66,7 +66,7 @@ def get_files_by_search_text(text: str) -> list[dict]:
 	if not text:
 		return []
 
-	text = "%" + cstr(text).lower() + "%"
+	text = f"%{cstr(text).lower()}%"
 	return frappe.get_list(
 		"File",
 		fields=["name", "file_name", "file_url", "is_folder", "modified"],

@@ -43,9 +43,7 @@ class PackageRelease(Document):
 
 	def autoname(self):
 		self.set_version()
-		self.name = "{}-{}.{}.{}".format(
-			frappe.db.get_value("Package", self.package, "package_name"), self.major, self.minor, self.patch
-		)
+		self.name = f'{frappe.db.get_value("Package", self.package, "package_name")}-{self.major}.{self.minor}.{self.patch}'
 
 	def validate(self):
 		if self.publish:
@@ -80,9 +78,7 @@ class PackageRelease(Document):
 				license.write(package.license)
 
 		# write package.json as `frappe_package.json`
-		with open(
-			frappe.get_site_path("packages", package.package_name, package.package_name + ".json"), "w"
-		) as packagefile:
+		with open(frappe.get_site_path("packages", package.package_name, f"{package.package_name}.json"), "w") as packagefile:
 			packagefile.write(frappe.as_json(package.as_dict(no_nulls=True)))
 
 	def make_tarfile(self, package):

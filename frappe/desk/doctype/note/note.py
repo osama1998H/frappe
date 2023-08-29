@@ -47,7 +47,4 @@ def has_permission(doc, ptype, user):
 	if doc.public == 1 or user == "Administrator":
 		return True
 
-	if user == doc.owner:
-		return True
-
-	return False
+	return user == doc.owner

@@ -77,9 +77,7 @@ class Report(Document):
 			d.role for d in frappe.get_all("Has Role", fields=["role"], filters={"parent": self.name})
 		]
 
-		custom_roles = get_custom_allowed_roles("report", self.name)
-
-		if custom_roles:
+		if custom_roles := get_custom_allowed_roles("report", self.name):
 			allowed = custom_roles
 
 		if not allowed:
@@ -144,17 +142,14 @@ class Report(Document):
 	def execute_module(self, filters):
 		# report in python module
 		module = self.module or frappe.db.get_value("DocType", self.ref_doctype, "module")
-		method_name = get_report_module_dotted_path(module, self.name) + ".execute"
+		method_name = f"{get_report_module_dotted_path(module, self.name)}.execute"
 		return frappe.get_attr(method_name)(frappe._dict(filters))
 
 	def execute_script(self, filters):
 		# server script
 		loc = {"filters": frappe._dict(filters), "data": None, "result": None}
 		safe_exec(self.report_script, None, loc)
-		if loc["data"]:
-			return loc["data"]
-		else:
-			return self.get_columns(), loc["result"]
+		return loc["data"] if loc["data"] else (self.get_columns(), loc["result"])
 
 	def get_data(
 		self, filters=None, limit=None, user=None, as_dict=False, ignore_prepared_report=False
@@ -222,7 +217,7 @@ class Report(Document):
 
 		columns = self.build_standard_report_columns(columns, group_by_args)
 
-		result = result + [list(d) for d in _result]
+		result += [list(d) for d in _result]
 
 		if params.get("add_totals_row"):
 			result = append_totals_row(result)
@@ -243,10 +238,11 @@ class Report(Document):
 			columns = params.get("fields")
 		else:
 			columns = [["name", self.ref_doctype]]
-			for df in frappe.get_meta(self.ref_doctype).fields:
-				if df.in_list_view:
-					columns.append([df.fieldname, self.ref_doctype])
-
+			columns.extend(
+				[df.fieldname, self.ref_doctype]
+				for df in frappe.get_meta(self.ref_doctype).fields
+				if df.in_list_view
+			)
 		return columns
 
 	def get_standard_report_filters(self, params, filters):
@@ -350,21 +346,19 @@ def get_report_module_dotted_path(module, report_name):
 
 
 def get_group_by_field(args, doctype):
-	if args["aggregate_function"] == "count":
-		group_by_field = "count(*) as _aggregate_column"
-	else:
-		group_by_field = f"{args.aggregate_function}({args.aggregate_on}) as _aggregate_column"
-
-	return group_by_field
+	return (
+		"count(*) as _aggregate_column"
+		if args["aggregate_function"] == "count"
+		else f"{args.aggregate_function}({args.aggregate_on}) as _aggregate_column"
+	)
 
 
 def get_group_by_column_label(args, meta):
 	if args["aggregate_function"] == "count":
-		label = "Count"
-	else:
-		sql_fn_map = {"avg": "Average", "sum": "Sum"}
-		aggregate_on_label = meta.get_label(args.aggregate_on)
-		label = _("{function} of {fieldlabel}").format(
-			function=sql_fn_map[args.aggregate_function], fieldlabel=aggregate_on_label
-		)
-	return label
+		return "Count"
+	sql_fn_map = {"avg": "Average", "sum": "Sum"}
+	aggregate_on_label = meta.get_label(args.aggregate_on)
+	return _("{function} of {fieldlabel}").format(
+		function=sql_fn_map[args.aggregate_function],
+		fieldlabel=aggregate_on_label,
+	)

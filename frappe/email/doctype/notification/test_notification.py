@@ -237,7 +237,9 @@ class TestNotification(FrappeTestCase):
 			)
 		)
 
-		event.starts_on = frappe.utils.add_days(frappe.utils.nowdate(), 2) + " 12:00:00"
+		event.starts_on = (
+			f"{frappe.utils.add_days(frappe.utils.nowdate(), 2)} 12:00:00"
+		)
 		event.save()
 
 		# Value Change notification alert will be trigger as description is not changed

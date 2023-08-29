@@ -20,13 +20,10 @@ from frappe.utils import add_user_info, format_duration
 @frappe.read_only()
 def get():
 	args = get_form_params()
-	# If virtual doctype, get data from controller get_list method
-	if is_virtual_doctype(args.doctype):
-		controller = get_controller(args.doctype)
-		data = compress(controller.get_list(args))
-	else:
-		data = compress(execute(**args), args=args)
-	return data
+	if not is_virtual_doctype(args.doctype):
+		return compress(execute(**args), args=args)
+	controller = get_controller(args.doctype)
+	return compress(controller.get_list(args))
 
 
 @frappe.whitelist()
@@ -34,14 +31,12 @@ def get():
 def get_list():
 	args = get_form_params()
 
-	if is_virtual_doctype(args.doctype):
-		controller = get_controller(args.doctype)
-		data = controller.get_list(args)
-	else:
+	if not is_virtual_doctype(args.doctype):
 		# uncompressed (refactored from frappe.model.db_query.get_list)
-		data = execute(**args)
+		return execute(**args)
 
-	return data
+	controller = get_controller(args.doctype)
+	return controller.get_list(args)
 
 
 @frappe.whitelist()
@@ -51,13 +46,11 @@ def get_count():
 
 	if is_virtual_doctype(args.doctype):
 		controller = get_controller(args.doctype)
-		data = controller.get_count(args)
+		return controller.get_count(args)
 	else:
 		distinct = "distinct " if args.distinct == "true" else ""
 		args.fields = [f"count({distinct}`tab{args.doctype}`.name) as total_count"]
-		data = execute(**args)[0].get("total_count")
-
-	return data
+		return execute(**args)[0].get("total_count")
 
 
 def execute(doctype, *args, **kwargs):
@@ -261,9 +254,7 @@ def compress(data, args=None):
 	values = []
 	keys = list(data[0])
 	for row in data:
-		new_row = []
-		for key in keys:
-			new_row.append(row.get(key))
+		new_row = [row.get(key) for key in keys]
 		values.append(new_row)
 
 		# add user info for assignments (avatar)
@@ -443,8 +434,7 @@ def handle_duration_fieldtype_values(doctype, data, fields):
 		if df and df.fieldtype == "Duration":
 			index = fields.index(field) + 1
 			for i in range(1, len(data)):
-				val_in_seconds = data[i][index]
-				if val_in_seconds:
+				if val_in_seconds := data[i][index]:
 					duration_val = format_duration(val_in_seconds, df.hide_days)
 					data[i][index] = duration_val
 	return data
@@ -582,14 +572,14 @@ def get_filter_dashboard_data(stats, doctype, filters=None):
 
 	columns = frappe.db.get_table_columns(doctype)
 	for tag in tags:
-		if not tag["name"] in columns:
+		if tag["name"] not in columns:
 			continue
 		tagcount = []
 		if tag["type"] not in ["Date", "Datetime"]:
 			tagcount = frappe.get_list(
 				doctype,
 				fields=[tag["name"], "count(*)"],
-				filters=filters + ["ifnull(`%s`,'')!=''" % tag["name"]],
+				filters=filters + [f"""ifnull(`{tag["name"]}`,'')!=''"""],
 				group_by=tag["name"],
 				as_list=True,
 			)
@@ -628,7 +618,7 @@ def scrub_user_tags(tagcount):
 	"""rebuild tag list for tags"""
 	rdict = {}
 	tagdict = dict(tagcount)
-	for t in tagdict:
+	for t, value in tagdict.items():
 		if not t:
 			continue
 		alltags = t.split(",")
@@ -637,13 +627,9 @@ def scrub_user_tags(tagcount):
 				if tag not in rdict:
 					rdict[tag] = 0
 
-				rdict[tag] += tagdict[t]
+				rdict[tag] += value
 
-	rlist = []
-	for tag in rdict:
-		rlist.append([tag, rdict[tag]])
-
-	return rlist
+	return [[tag, value_] for tag, value_ in rdict.items()]
 
 
 # used in building query in queries.py
@@ -652,7 +638,7 @@ def get_match_cond(doctype, as_condition=True):
 	if not as_condition:
 		return cond
 
-	return ((" and " + cond) if cond else "").replace("%", "%%")
+	return (f" and {cond}" if cond else "").replace("%", "%%")
 
 
 def build_match_conditions(doctype, user=None, as_condition=True):
@@ -670,41 +656,39 @@ def get_filters_cond(
 	if isinstance(filters, str):
 		filters = json.loads(filters)
 
-	if filters:
-		flt = filters
-		if isinstance(filters, dict):
-			filters = filters.items()
-			flt = []
-			for f in filters:
-				if isinstance(f[1], str) and f[1][0] == "!":
-					flt.append([doctype, f[0], "!=", f[1][1:]])
-				elif isinstance(f[1], (list, tuple)) and f[1][0] in (
-					">",
-					"<",
-					">=",
-					"<=",
-					"!=",
-					"like",
-					"not like",
-					"in",
-					"not in",
-					"between",
-				):
+	if not filters:
+		return ""
+	flt = filters
+	if isinstance(filters, dict):
+		filters = filters.items()
+		flt = []
+		for f in filters:
+			if isinstance(f[1], str) and f[1][0] == "!":
+				flt.append([doctype, f[0], "!=", f[1][1:]])
+			elif isinstance(f[1], (list, tuple)) and f[1][0] in (
+				">",
+				"<",
+				">=",
+				"<=",
+				"!=",
+				"like",
+				"not like",
+				"in",
+				"not in",
+				"between",
+			):
 
-					flt.append([doctype, f[0], f[1][0], f[1][1]])
-				else:
-					flt.append([doctype, f[0], "=", f[1]])
+				flt.append([doctype, f[0], f[1][0], f[1][1]])
+			else:
+				flt.append([doctype, f[0], "=", f[1]])
 
-		query = DatabaseQuery(doctype)
-		query.filters = flt
-		query.conditions = conditions
+	query = DatabaseQuery(doctype)
+	query.filters = flt
+	query.conditions = conditions
 
-		if with_match_conditions:
-			query.build_match_conditions()
+	if with_match_conditions:
+		query.build_match_conditions()
 
-		query.build_filter_conditions(flt, conditions, ignore_permissions)
+	query.build_filter_conditions(flt, conditions, ignore_permissions)
 
-		cond = " and " + " and ".join(query.conditions)
-	else:
-		cond = ""
-	return cond
+	return " and " + " and ".join(query.conditions)

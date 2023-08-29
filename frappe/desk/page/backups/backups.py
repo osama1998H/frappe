@@ -34,7 +34,7 @@ def get_context(context):
 
 	files = [
 		(
-			"/backups/" + _file,
+			f"/backups/{_file}",
 			get_time(os.path.join(path, _file)),
 			get_encrytion_status(os.path.join(path, _file)),
 			get_size(os.path.join(path, _file)),

@@ -57,7 +57,7 @@ def _new_site(
 		print(f"Site {site} already exists")
 		sys.exit(1)
 
-	if no_mariadb_socket and not db_type == "mariadb":
+	if no_mariadb_socket and db_type != "mariadb":
 		print("--no-mariadb-socket requires db_type to be set to mariadb.")
 		sys.exit(1)
 
@@ -66,7 +66,7 @@ def _new_site(
 	if not db_name:
 		import hashlib
 
-		db_name = "_" + hashlib.sha1(os.path.realpath(frappe.get_site_path()).encode()).hexdigest()[:16]
+		db_name = f"_{hashlib.sha1(os.path.realpath(frappe.get_site_path()).encode()).hexdigest()[:16]}"
 
 	try:
 		# enable scheduler post install?
@@ -589,8 +589,8 @@ def get_site_config_path():
 def get_conf_params(db_name=None, db_password=None):
 	if not db_name:
 		db_name = input("Database Name: ")
-		if not db_name:
-			raise Exception("Database Name Required")
+	if not db_name:
+		raise Exception("Database Name Required")
 
 	if not db_password:
 		from frappe.utils import random_string
@@ -664,36 +664,37 @@ def extract_sql_from_archive(sql_file_path):
 
 
 def convert_archive_content(sql_file_path):
-	if frappe.conf.db_type == "mariadb":
-		# ever since mariaDB 10.6, row_format COMPRESSED has been deprecated and removed
-		# this step is added to ease restoring sites depending on older mariaDB servers
-		# This change was reverted by mariadb in 10.6.6
-		# Ref: https://mariadb.com/kb/en/innodb-compressed-row-format/#read-only
-		from pathlib import Path
+	if frappe.conf.db_type != "mariadb":
+		return
+	# ever since mariaDB 10.6, row_format COMPRESSED has been deprecated and removed
+	# this step is added to ease restoring sites depending on older mariaDB servers
+	# This change was reverted by mariadb in 10.6.6
+	# Ref: https://mariadb.com/kb/en/innodb-compressed-row-format/#read-only
+	from pathlib import Path
 
-		from frappe.utils import random_string
+	from frappe.utils import random_string
 
-		version = _guess_mariadb_version()
-		if not version or (version <= (10, 6, 0) or version >= (10, 6, 6)):
-			return
+	version = _guess_mariadb_version()
+	if not version or (version <= (10, 6, 0) or version >= (10, 6, 6)):
+		return
 
-		click.secho(
-			"MariaDB version being used does not support ROW_FORMAT=COMPRESSED, "
-			"converting into DYNAMIC format.",
-			fg="yellow",
-		)
+	click.secho(
+		"MariaDB version being used does not support ROW_FORMAT=COMPRESSED, "
+		"converting into DYNAMIC format.",
+		fg="yellow",
+	)
 
-		old_sql_file_path = Path(f"{sql_file_path}_{random_string(10)}")
-		sql_file_path = Path(sql_file_path)
+	old_sql_file_path = Path(f"{sql_file_path}_{random_string(10)}")
+	sql_file_path = Path(sql_file_path)
 
-		os.rename(sql_file_path, old_sql_file_path)
-		sql_file_path.touch()
+	os.rename(sql_file_path, old_sql_file_path)
+	sql_file_path.touch()
 
-		with open(old_sql_file_path) as r, open(sql_file_path, "a") as w:
-			for line in r:
-				w.write(line.replace("ROW_FORMAT=COMPRESSED", "ROW_FORMAT=DYNAMIC"))
+	with open(old_sql_file_path) as r, open(sql_file_path, "a") as w:
+		for line in r:
+			w.write(line.replace("ROW_FORMAT=COMPRESSED", "ROW_FORMAT=DYNAMIC"))
 
-		old_sql_file_path.unlink()
+	old_sql_file_path.unlink()
 
 
 def extract_sql_gzip(sql_gz_path):
@@ -785,9 +786,9 @@ def is_downgrade(sql_file_path, verbose=False):
 
 				for app in all_apps:
 					app_name = app[0]
-					app_version = app[1].split(" ", 1)[0]
-
 					if app_name == "frappe":
+						app_version = app[1].split(" ", 1)[0]
+
 						try:
 							current_version = Version(frappe.__version__)
 							backup_version = Version(app_version[1:] if app_version[0] == "v" else app_version)

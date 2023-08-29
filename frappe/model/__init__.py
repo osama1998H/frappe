@@ -181,8 +181,8 @@ def delete_fields(args_dict, delete=0):
 				# mariadb implicitly commits before DDL, make it explicit
 				frappe.db.commit()
 
-			query = "ALTER TABLE `tab%s` " % dt + ", ".join(
-				"DROP COLUMN `%s`" % f for f in fields_need_to_delete
+			query = f"ALTER TABLE `tab{dt}` " + ", ".join(
+				f"DROP COLUMN `{f}`" for f in fields_need_to_delete
 			)
 			frappe.db.sql(query)
 

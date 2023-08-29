@@ -51,7 +51,7 @@ def _get_children(doctype, parent="", ignore_permissions=False):
 		doctype,
 		fields=[
 			"name as value",
-			"{} as title".format(meta.get("title_field") or "name"),
+			f'{meta.get("title_field") or "name"} as title',
 			"is_group as expandable",
 		],
 		filters=filters,
@@ -79,6 +79,6 @@ def make_tree_args(**kwarg):
 	if kwarg["is_root"] == "true":
 		kwarg["is_root"] = True
 
-	kwarg.update({parent_field: kwarg.get("parent") or kwarg.get(parent_field)})
+	kwarg[parent_field] = kwarg.get("parent") or kwarg.get(parent_field)
 
 	return frappe._dict(kwarg)

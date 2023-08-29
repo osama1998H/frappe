@@ -42,10 +42,7 @@ def has_permission(doc, ptype, user):
 	if doc.private == 0 or user == "Administrator":
 		return True
 
-	if user == doc.owner:
-		return True
-
-	return False
+	return user == doc.owner
 
 
 @frappe.whitelist()
@@ -187,10 +184,7 @@ def quick_kanban_board(doctype, board_name, field_name, project=None):
 		if field.fieldname == field_name:
 			options = field.options
 
-	columns = []
-	if options:
-		columns = options.split("\n")
-
+	columns = options.split("\n") if options else []
 	for column in columns:
 		if not column:
 			continue

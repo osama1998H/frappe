@@ -98,19 +98,24 @@ class FormMeta(Meta):
 
 		system_country = frappe.get_system_settings("country")
 
-		self._add_code(_get_path(self.name + ".js"), "__js")
+		self._add_code(_get_path(f"{self.name}.js"), "__js")
 		if system_country:
-			self._add_code(_get_path(os.path.join("regional", system_country + ".js")), "__js")
+			self._add_code(
+				_get_path(os.path.join("regional", f"{system_country}.js")), "__js"
+			)
 
-		self._add_code(_get_path(self.name + ".css"), "__css")
-		self._add_code(_get_path(self.name + "_list.js"), "__list_js")
+		self._add_code(_get_path(f"{self.name}.css"), "__css")
+		self._add_code(_get_path(f"{self.name}_list.js"), "__list_js")
 		if system_country:
-			self._add_code(_get_path(os.path.join("regional", system_country + "_list.js")), "__list_js")
+			self._add_code(
+				_get_path(os.path.join("regional", f"{system_country}_list.js")),
+				"__list_js",
+			)
 
-		self._add_code(_get_path(self.name + "_calendar.js"), "__calendar_js")
-		self._add_code(_get_path(self.name + "_tree.js"), "__tree_js")
+		self._add_code(_get_path(f"{self.name}_calendar.js"), "__calendar_js")
+		self._add_code(_get_path(f"{self.name}_tree.js"), "__tree_js")
 
-		listview_template = _get_path(self.name + "_list.html")
+		listview_template = _get_path(f"{self.name}_list.html")
 		if os.path.exists(listview_template):
 			self.set("__listview_template", get_html_format(listview_template))
 
@@ -121,8 +126,7 @@ class FormMeta(Meta):
 		self.add_html_templates(path)
 
 	def _add_code(self, path, fieldname):
-		js = get_js(path)
-		if js:
+		if js := get_js(path):
 			comment = f"\n\n/* Adding {path} */\n\n"
 			sourceURL = f"\n\n//# sourceURL={scrub(self.name) + fieldname}"
 			self.set(fieldname, (self.get(fieldname) or "") + comment + js + sourceURL)
@@ -130,7 +134,7 @@ class FormMeta(Meta):
 	def add_html_templates(self, path):
 		if self.custom:
 			return
-		templates = dict()
+		templates = {}
 		for fname in os.listdir(path):
 			if fname.endswith(".html"):
 				with open(os.path.join(path, fname), encoding="utf-8") as f:
@@ -241,20 +245,20 @@ class FormMeta(Meta):
 			workflow = frappe.get_doc("Workflow", workflow_name)
 			workflow_docs.append(workflow)
 
-			for d in workflow.get("states"):
-				workflow_docs.append(frappe.get_doc("Workflow State", d.state))
-
+			workflow_docs.extend(
+				frappe.get_doc("Workflow State", d.state) for d in workflow.get("states")
+			)
 		self.set("__workflow_docs", workflow_docs)
 
 	def load_templates(self):
 		if not self.custom:
 			module = load_doctype_module(self.name)
 			app = module.__name__.split(".", 1)[0]
-			templates = {}
 			if hasattr(module, "form_grid_templates"):
-				for key, path in module.form_grid_templates.items():
-					templates[key] = get_html_format(frappe.get_app_path(app, path))
-
+				templates = {
+					key: get_html_format(frappe.get_app_path(app, path))
+					for key, path in module.form_grid_templates.items()
+				}
 				self.set("__form_grid_templates", templates)
 
 	def set_translations(self, lang):
@@ -306,6 +310,5 @@ def get_code_files_via_hooks(hook, name):
 
 
 def get_js(path):
-	js = frappe.read_file(path)
-	if js:
+	if js := frappe.read_file(path):
 		return render_include(js)

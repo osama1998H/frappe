@@ -64,13 +64,9 @@ def get_permission_query_conditions(user):
 	allowed_modules = [
 		frappe.db.escape(module.get("module_name")) for module in get_modules_from_all_apps_for_user()
 	]
-	module_condition = (
-		"`tabDashboard`.`module` in ({allowed_modules}) or `tabDashboard`.`module` is NULL".format(
-			allowed_modules=",".join(allowed_modules)
-		)
+	return "`tabDashboard`.`module` in ({allowed_modules}) or `tabDashboard`.`module` is NULL".format(
+		allowed_modules=",".join(allowed_modules)
 	)
-
-	return module_condition
 
 
 @frappe.whitelist()
@@ -91,12 +87,12 @@ def get_permitted_charts(dashboard_name):
 
 @frappe.whitelist()
 def get_permitted_cards(dashboard_name):
-	permitted_cards = []
 	dashboard = frappe.get_doc("Dashboard", dashboard_name)
-	for card in dashboard.cards:
-		if frappe.has_permission("Number Card", doc=card.card):
-			permitted_cards.append(card)
-	return permitted_cards
+	return [
+		card
+		for card in dashboard.cards
+		if frappe.has_permission("Number Card", doc=card.card)
+	]
 
 
 def get_non_standard_charts_in_dashboard(dashboard):
@@ -123,7 +119,7 @@ def get_non_standard_warning_message(non_standard_docs_map):
 		html += "<br>"
 		return html
 
-	html = message + "<br>"
+	html = f"{message}<br>"
 
 	for doctype in non_standard_docs_map:
 		if non_standard_docs_map[doctype]:

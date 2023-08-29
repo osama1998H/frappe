@@ -22,10 +22,10 @@ class Address(Document):
 				self.address_title = self.links[0].link_name
 
 		if self.address_title:
-			self.name = cstr(self.address_title).strip() + "-" + cstr(_(self.address_type)).strip()
+			self.name = f"{cstr(self.address_title).strip()}-{cstr(_(self.address_type)).strip()}"
 			if frappe.db.exists("Address", self.name):
 				self.name = make_autoname(
-					cstr(self.address_title).strip() + "-" + cstr(self.address_type).strip() + "-.#"
+					f"{cstr(self.address_title).strip()}-{cstr(self.address_type).strip()}-.#"
 				)
 		else:
 			throw(_("Address Title is mandatory."))
@@ -39,8 +39,7 @@ class Address(Document):
 	def link_address(self):
 		"""Link address based on owner"""
 		if not self.links:
-			contact_name = frappe.db.get_value("Contact", {"email_id": self.owner})
-			if contact_name:
+			if contact_name := frappe.db.get_value("Contact", {"email_id": self.owner}):
 				contact = frappe.get_cached_doc("Contact", contact_name)
 				for link in contact.links:
 					self.append("links", dict(link_doctype=link.link_doctype, link_name=link.link_name))
@@ -54,9 +53,9 @@ class Address(Document):
 		for field in preferred_fields:
 			if self.get(field):
 				for link in self.links:
-					address = get_preferred_address(link.link_doctype, link.link_name, field)
-
-					if address:
+					if address := get_preferred_address(
+						link.link_doctype, link.link_name, field
+					):
 						update_preferred_address(address, field)
 
 	def get_display(self):
@@ -69,16 +68,15 @@ class Address(Document):
 
 	def has_common_link(self, doc):
 		reference_links = [(link.link_doctype, link.link_name) for link in doc.links]
-		for link in self.links:
-			if (link.link_doctype, link.link_name) in reference_links:
-				return True
-
-		return False
+		return any(
+			(link.link_doctype, link.link_name) in reference_links
+			for link in self.links
+		)
 
 
 def get_preferred_address(doctype, name, preferred_key="is_primary_address"):
 	if preferred_key in ["is_shipping_address", "is_primary_address"]:
-		address = frappe.db.sql(
+		if address := frappe.db.sql(
 			""" SELECT
 				addr.name
 			FROM
@@ -91,9 +89,7 @@ def get_preferred_address(doctype, name, preferred_key="is_primary_address"):
 			% ("%s", "%s", preferred_key, "%s"),
 			(doctype, name, 1),
 			as_dict=1,
-		)
-
-		if address:
+		):
 			return address[0].name
 
 	return
@@ -105,8 +101,9 @@ def get_default_address(doctype, name, sort_key="is_primary_address"):
 	if sort_key not in ["is_shipping_address", "is_primary_address"]:
 		return None
 
-	out = frappe.db.sql(
-		""" SELECT
+	if not (
+		out := frappe.db.sql(
+			""" SELECT
 			addr.name, addr.%s
 		FROM
 			`tabAddress` addr, `tabDynamic Link` dl
@@ -114,18 +111,16 @@ def get_default_address(doctype, name, sort_key="is_primary_address"):
 			dl.parent = addr.name and dl.link_doctype = %s and
 			dl.link_name = %s and ifnull(addr.disabled, 0) = 0
 		"""
-		% (sort_key, "%s", "%s"),
-		(doctype, name),
-		as_dict=True,
-	)
-
-	if out:
-		for contact in out:
-			if contact.get(sort_key):
-				return contact.name
-		return out[0].name
-	else:
+			% (sort_key, "%s", "%s"),
+			(doctype, name),
+			as_dict=True,
+		)
+	):
 		return None
+	for contact in out:
+		if contact.get(sort_key):
+			return contact.name
+	return out[0].name
 
 
 @frappe.whitelist()
@@ -188,9 +183,9 @@ def get_address_list(doctype, txt, filters, limit_start, limit_page_length=20, o
 
 def has_website_permission(doc, ptype, user, verbose=False):
 	"""Returns true if there is a related lead or contact related to this document"""
-	contact_name = frappe.db.get_value("Contact", {"email_id": frappe.session.user})
-
-	if contact_name:
+	if contact_name := frappe.db.get_value(
+		"Contact", {"email_id": frappe.session.user}
+	):
 		contact = frappe.get_doc("Contact", contact_name)
 		return contact.has_common_link(doc)
 
@@ -232,12 +227,12 @@ def address_query(doctype, txt, searchfield, start, page_len, filters):
 	link_doctype = filters.pop("link_doctype")
 	link_name = filters.pop("link_name")
 
-	condition = ""
 	meta = frappe.get_meta(doctype)
-	for fieldname, value in filters.items():
-		if meta.get_field(fieldname) or fieldname in frappe.db.DEFAULT_COLUMNS:
-			condition += f" and {fieldname}={frappe.db.escape(value)}"
-
+	condition = "".join(
+		f" and {fieldname}={frappe.db.escape(value)}"
+		for fieldname, value in filters.items()
+		if meta.get_field(fieldname) or fieldname in frappe.db.DEFAULT_COLUMNS
+	)
 	searchfields = meta.get_search_fields()
 
 	if searchfield and (meta.get_field(searchfield) or searchfield in frappe.db.DEFAULT_COLUMNS):
@@ -272,7 +267,7 @@ def address_query(doctype, txt, searchfield, start, page_len, filters):
 			condition=condition or "",
 		),
 		{
-			"txt": "%" + txt + "%",
+			"txt": f"%{txt}%",
 			"_txt": txt.replace("%", ""),
 			"start": start,
 			"page_len": page_len,

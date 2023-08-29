@@ -13,8 +13,7 @@ class CustomRole(Document):
 
 def get_custom_allowed_roles(field, name):
 	allowed_roles = []
-	custom_role = frappe.db.get_value("Custom Role", {field: name}, "name")
-	if custom_role:
+	if custom_role := frappe.db.get_value("Custom Role", {field: name}, "name"):
 		custom_role_doc = frappe.get_doc("Custom Role", custom_role)
 		allowed_roles = [d.role for d in custom_role_doc.roles]
 

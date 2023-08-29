@@ -137,14 +137,15 @@ def get(
 	filters.append([chart.document_type, "docstatus", "<", 2, False])
 
 	if chart.chart_type == "Group By":
-		chart_config = get_group_by_chart_config(chart, filters)
+		return get_group_by_chart_config(chart, filters)
 	else:
-		if chart.type == "Heatmap":
-			chart_config = get_heatmap_chart_config(chart, filters, heatmap_year)
-		else:
-			chart_config = get_chart_config(chart, filters, timespan, timegrain, from_date, to_date)
-
-	return chart_config
+		return (
+			get_heatmap_chart_config(chart, filters, heatmap_year)
+			if chart.type == "Heatmap"
+			else get_chart_config(
+				chart, filters, timespan, timegrain, from_date, to_date
+			)
+		)
 
 
 @frappe.whitelist()
@@ -264,11 +265,10 @@ def get_heatmap_chart_config(chart, filters, heatmap_year):
 		)
 	)
 
-	chart_config = {
+	return {
 		"labels": [],
 		"dataPoints": data,
 	}
-	return chart_config
 
 
 def get_group_by_chart_config(chart, filters):
@@ -278,7 +278,7 @@ def get_group_by_chart_config(chart, filters):
 	group_by_field = chart.group_by_based_on
 	doctype = chart.document_type
 
-	data = frappe.db.get_list(
+	if data := frappe.db.get_list(
 		doctype,
 		fields=[
 			f"{group_by_field} as name",
@@ -290,15 +290,15 @@ def get_group_by_chart_config(chart, filters):
 		group_by=group_by_field,
 		order_by="count desc",
 		ignore_ifnull=True,
-	)
-
-	if data:
-		chart_config = {
-			"labels": [item["name"] if item["name"] else "Not Specified" for item in data],
-			"datasets": [{"name": chart.name, "values": [item["count"] for item in data]}],
+	):
+		return {
+			"labels": [
+				item["name"] if item["name"] else "Not Specified" for item in data
+			],
+			"datasets": [
+				{"name": chart.name, "values": [item["count"] for item in data]}
+			],
 		}
-
-		return chart_config
 	else:
 		return None
 
@@ -314,15 +314,15 @@ def get_aggregate_function(chart_type):
 def get_result(data, timegrain, from_date, to_date, chart_type):
 	dates = get_dates_from_timegrain(from_date, to_date, timegrain)
 	result = [[date, 0] for date in dates]
-	data_index = 0
 	if data:
+		data_index = 0
 		for i, d in enumerate(result):
 			count = 0
 			while data_index < len(data) and getdate(data[data_index][0]) <= d[0]:
 				d[1] += data[data_index][1]
 				count += data[data_index][2]
 				data_index += 1
-			if chart_type == "Average" and not count == 0:
+			if chart_type == "Average" and count != 0:
 				d[1] = d[1] / count
 			if chart_type == "Count":
 				d[1] = count
@@ -348,7 +348,7 @@ class DashboardChart(Document):
 	def validate(self):
 		if not frappe.conf.developer_mode and self.is_standard:
 			frappe.throw(_("Cannot edit Standard charts"))
-		if self.chart_type != "Custom" and self.chart_type != "Report":
+		if self.chart_type not in ["Custom", "Report"]:
 			self.check_required_field()
 			self.check_document_type()
 
@@ -370,9 +370,8 @@ class DashboardChart(Document):
 				frappe.throw(_("Group By field is required to create a dashboard chart"))
 			if self.group_by_type in ["Sum", "Average"] and not self.aggregate_function_based_on:
 				frappe.throw(_("Aggregate Function field is required to create a dashboard chart"))
-		else:
-			if not self.based_on:
-				frappe.throw(_("Time series based on is required to create a dashboard chart"))
+		elif not self.based_on:
+			frappe.throw(_("Time series based on is required to create a dashboard chart"))
 
 	def check_document_type(self):
 		if frappe.get_meta(self.document_type).issingle:

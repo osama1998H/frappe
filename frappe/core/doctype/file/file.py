@@ -302,38 +302,37 @@ class File(Document):
 			frappe.throw(_("File {0} does not exist").format(self.file_url), IOError)
 
 	def validate_duplicate_entry(self):
-		if not self.flags.ignore_duplicate_entry_error and not self.is_folder:
-			if not self.content_hash:
-				self.generate_content_hash()
+		if self.flags.ignore_duplicate_entry_error or self.is_folder:
+			return
+		if not self.content_hash:
+			self.generate_content_hash()
 
-			# check duplicate name
-			# check duplicate assignment
-			filters = {
-				"content_hash": self.content_hash,
-				"is_private": self.is_private,
-				"name": ("!=", self.name),
+		# check duplicate name
+		# check duplicate assignment
+		filters = {
+			"content_hash": self.content_hash,
+			"is_private": self.is_private,
+			"name": ("!=", self.name),
+		}
+		if self.attached_to_doctype and self.attached_to_name:
+			filters |= {
+				"attached_to_doctype": self.attached_to_doctype,
+				"attached_to_name": self.attached_to_name,
 			}
-			if self.attached_to_doctype and self.attached_to_name:
-				filters.update(
-					{
-						"attached_to_doctype": self.attached_to_doctype,
-						"attached_to_name": self.attached_to_name,
-					}
-				)
-			duplicate_file = frappe.db.get_value("File", filters, ["name", "file_url"], as_dict=1)
-
-			if duplicate_file:
-				duplicate_file_doc = frappe.get_cached_doc("File", duplicate_file.name)
-				if duplicate_file_doc.exists_on_disk():
-					# just use the url, to avoid uploading a duplicate
-					self.file_url = duplicate_file.file_url
+		if duplicate_file := frappe.db.get_value(
+			"File", filters, ["name", "file_url"], as_dict=1
+		):
+			duplicate_file_doc = frappe.get_cached_doc("File", duplicate_file.name)
+			if duplicate_file_doc.exists_on_disk():
+				# just use the url, to avoid uploading a duplicate
+				self.file_url = duplicate_file.file_url
 
 	def set_file_name(self):
 		if not self.file_name and not self.file_url:
 			frappe.throw(
 				_("Fields `file_name` or `file_url` must be set for File"), exc=frappe.MandatoryError
 			)
-		elif not self.file_name and self.file_url:
+		elif not self.file_name:
 			self.file_name = self.file_url.split("/")[-1]
 		else:
 			self.file_name = re.sub(r"/", "", self.file_name)
@@ -395,12 +394,11 @@ class File(Document):
 
 	def _delete_file_on_disk(self):
 		"""If file not attached to any other record, delete it"""
-		on_disk_file_not_shared = self.content_hash and not frappe.get_all(
+		if on_disk_file_not_shared := self.content_hash and not frappe.get_all(
 			"File",
 			filters={"content_hash": self.content_hash, "name": ["!=", self.name]},
 			limit=1,
-		)
-		if on_disk_file_not_shared:
+		):
 			self.delete_file_data_content()
 		else:
 			self.delete_file_data_content(only_thumbnail=True)
@@ -585,8 +583,7 @@ class File(Document):
 					is_private=self.is_private,
 				)
 			call_hook_method("before_write_file", file_size=self.file_size)
-			write_file_method = get_hook_method("write_file")
-			if write_file_method:
+			if write_file_method := get_hook_method("write_file"):
 				return write_file_method(self)
 			return self.save_file_on_filesystem()
 
@@ -615,19 +612,16 @@ class File(Document):
 		return file_size
 
 	def delete_file_data_content(self, only_thumbnail=False):
-		method = get_hook_method("delete_file_data_content")
-		if method:
+		if method := get_hook_method("delete_file_data_content"):
 			method(self, only_thumbnail=only_thumbnail)
 		else:
 			self.delete_file_from_filesystem(only_thumbnail=only_thumbnail)
 
 	def delete_file_from_filesystem(self, only_thumbnail=False):
 		"""Delete file, thumbnail from File document"""
-		if only_thumbnail:
-			delete_file(self.thumbnail_url)
-		else:
+		if not only_thumbnail:
 			delete_file(self.file_url)
-			delete_file(self.thumbnail_url)
+		delete_file(self.thumbnail_url)
 
 	def is_downloadable(self):
 		return has_permission(self, "read")

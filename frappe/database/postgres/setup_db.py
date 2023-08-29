@@ -59,9 +59,9 @@ def import_db_from_sql(source_sql=None, verbose=False):
 	)
 
 	if pv:
-		command = f"{pv} {source_sql} | " + _command
+		command = f"{pv} {source_sql} | {_command}"
 	else:
-		command = _command + f" -f {source_sql}"
+		command = f"{_command} -f {source_sql}"
 
 	print("Restoring Database file...")
 	if verbose:

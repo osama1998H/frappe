@@ -43,10 +43,7 @@ class Exporter:
 		self.fields = self.serialize_exportable_fields()
 		self.add_header()
 
-		if export_data:
-			self.data = self.get_data_to_export()
-		else:
-			self.data = []
+		self.data = self.get_data_to_export() if export_data else []
 		self.add_data()
 
 	def get_all_exportable_fields(self):

@@ -54,10 +54,10 @@ class Domain(Document):
 					custom_fields = [custom_fields]
 
 				for custom_field_detail in custom_fields:
-					custom_field_name = frappe.db.get_value(
-						"Custom Field", dict(dt=doctype, fieldname=custom_field_detail.get("fieldname"))
-					)
-					if custom_field_name:
+					if custom_field_name := frappe.db.get_value(
+						"Custom Field",
+						dict(dt=doctype, fieldname=custom_field_detail.get("fieldname")),
+					):
 						frappe.delete_doc("Custom Field", custom_field_name)
 
 	def setup_roles(self):

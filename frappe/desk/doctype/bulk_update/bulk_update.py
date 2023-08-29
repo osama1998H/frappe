@@ -19,7 +19,7 @@ def update(doctype, field, value, condition="", limit=500):
 		limit = 500
 
 	if condition:
-		condition = " where " + condition
+		condition = f" where {condition}"
 
 	if ";" in condition:
 		frappe.throw(_("; not allowed in condition"))
@@ -27,8 +27,7 @@ def update(doctype, field, value, condition="", limit=500):
 	docnames = frappe.db.sql_list(
 		f"""select name from `tab{doctype}`{condition} limit {limit} offset 0"""
 	)
-	data = {}
-	data[field] = value
+	data = {field: value}
 	return submit_cancel_or_update_docs(doctype, docnames, "update", data)
 
 

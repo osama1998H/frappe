@@ -149,13 +149,11 @@ def get_user_pages_or_reports(parent, cache=False):
 	_cache = frappe.cache()
 
 	if cache:
-		has_role = _cache.get_value("has_role:" + parent, user=frappe.session.user)
+		has_role = _cache.get_value(f"has_role:{parent}", user=frappe.session.user)
 		if has_role:
 			return has_role
 
 	roles = frappe.get_roles()
-	has_role = {}
-
 	page = DocType("Page")
 	report = DocType("Report")
 
@@ -184,9 +182,14 @@ def get_user_pages_or_reports(parent, cache=False):
 		)
 	).run(as_dict=True)
 
-	for p in pages_with_custom_roles:
-		has_role[p.name] = {"modified": p.modified, "title": p.title, "ref_doctype": p.ref_doctype}
-
+	has_role = {
+		p.name: {
+			"modified": p.modified,
+			"title": p.title,
+			"ref_doctype": p.ref_doctype,
+		}
+		for p in pages_with_custom_roles
+	}
 	subq = (
 		frappe.qb.from_(customRole)
 		.select(customRole[parent.lower()])
@@ -248,7 +251,7 @@ def get_user_pages_or_reports(parent, cache=False):
 			has_role.pop(r, None)
 
 	# Expire every six hours
-	_cache.set_value("has_role:" + parent, has_role, frappe.session.user, 21600)
+	_cache.set_value(f"has_role:{parent}", has_role, frappe.session.user, 21600)
 	return has_role
 
 

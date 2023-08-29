@@ -39,17 +39,16 @@ class Comment(Document):
 			"Attachment": "attachment_logs",
 			"Attachment Removed": "attachment_logs",
 		}
-		key = key_map.get(self.comment_type)
-		if not key:
+		if key := key_map.get(self.comment_type):
+			frappe.publish_realtime(
+				"docinfo_update",
+				{"doc": self.as_dict(), "key": key, "action": action},
+				doctype=self.reference_doctype,
+				docname=self.reference_name,
+				after_commit=True,
+			)
+		else:
 			return
-
-		frappe.publish_realtime(
-			"docinfo_update",
-			{"doc": self.as_dict(), "key": key, "action": action},
-			doctype=self.reference_doctype,
-			docname=self.reference_name,
-			after_commit=True,
-		)
 
 	def remove_comment_from_cache(self):
 		_comments = get_comments_from_parent(self)
@@ -83,7 +82,7 @@ def update_comment_in_doc(doc):
 		return
 
 	def get_truncated(content):
-		return (content[:97] + "...") if len(content) > 100 else content
+		return f"{content[:97]}..." if len(content) > 100 else content
 
 	if doc.reference_doctype and doc.reference_name and doc.content:
 		_comments = get_comments_from_parent(doc)

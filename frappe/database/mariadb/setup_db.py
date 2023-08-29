@@ -33,19 +33,18 @@ def setup_database(force, source_sql, verbose, no_mariadb_socket=False):
 	if no_mariadb_socket:
 		dbman_kwargs["host"] = "%"
 
-	if force or (db_name not in dbman.get_database_list()):
-		dbman.delete_user(db_name, **dbman_kwargs)
-		dbman.drop_database(db_name)
-	else:
+	if not force and db_name in dbman.get_database_list():
 		raise Exception(f"Database {db_name} already exists")
 
+	dbman.delete_user(db_name, **dbman_kwargs)
+	dbman.drop_database(db_name)
 	dbman.create_user(db_name, frappe.conf.db_password, **dbman_kwargs)
 	if verbose:
-		print("Created user %s" % db_name)
+		print(f"Created user {db_name}")
 
 	dbman.create_database(db_name)
 	if verbose:
-		print("Created database %s" % db_name)
+		print(f"Created database {db_name}")
 
 	dbman.grant_all_privileges(db_name, db_name, **dbman_kwargs)
 	dbman.flush_privileges()
@@ -99,7 +98,7 @@ def import_db_from_sql(source_sql=None, verbose=False):
 		source_sql = os.path.join(os.path.dirname(__file__), "framework_mariadb.sql")
 	DbManager(frappe.local.db).restore_database(db_name, source_sql, db_name, frappe.conf.db_password)
 	if verbose:
-		print("Imported from database %s" % source_sql)
+		print(f"Imported from database {source_sql}")
 
 
 def check_database_settings():
@@ -112,8 +111,7 @@ def check_database_settings():
 	for key, expected_value in REQUIRED_MARIADB_CONFIG.items():
 		if mariadb_variables.get(key) != expected_value:
 			print(
-				"For key %s. Expected value %s, found value %s"
-				% (key, expected_value, mariadb_variables.get(key))
+				f"For key {key}. Expected value {expected_value}, found value {mariadb_variables.get(key)}"
 			)
 			result = False
 

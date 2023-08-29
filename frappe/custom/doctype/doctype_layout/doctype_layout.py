@@ -52,13 +52,10 @@ class DocTypeLayout(Document):
 			row_data = row.as_dict()
 
 			if field_details.get("insert_after"):
-				insert_after = next(
+				if insert_after := next(
 					(f for f in self.fields if f.fieldname == field_details.insert_after),
 					None,
-				)
-
-				# initialize new row to just after the insert_after field
-				if insert_after:
+				):
 					self.fields.insert(insert_after.idx, row)
 					self.fields.pop()
 
@@ -70,8 +67,9 @@ class DocTypeLayout(Document):
 	def remove_fields(self, removed_fields: list[str]) -> list[dict]:
 		removed = []
 		for field in removed_fields:
-			field_details = next((f for f in self.fields if f.fieldname == field), None)
-			if field_details:
+			if field_details := next(
+				(f for f in self.fields if f.fieldname == field), None
+			):
 				self.remove(field_details)
 				removed.append(field_details.as_dict())
 		return removed

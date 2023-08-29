@@ -56,19 +56,22 @@ class PostgresTable(DBTable):
 		frappe.db.commit()
 
 	def create_indexes(self):
-		create_index_query = ""
-		for key, col in self.columns.items():
+		if create_index_query := "".join(
+			(
+				'CREATE INDEX IF NOT EXISTS "{index_name}" ON `{table_name}`(`{field}`);'.format(
+					index_name=col.fieldname,
+					table_name=self.table_name,
+					field=col.fieldname,
+				)
+			)
+			for key, col in self.columns.items()
 			if (
 				col.set_index
 				and col.fieldtype in frappe.db.type_map
-				and frappe.db.type_map.get(col.fieldtype)[0] not in ("text", "longtext")
-			):
-				create_index_query += (
-					'CREATE INDEX IF NOT EXISTS "{index_name}" ON `{table_name}`(`{field}`);'.format(
-						index_name=col.fieldname, table_name=self.table_name, field=col.fieldname
-					)
-				)
-		if create_index_query:
+				and frappe.db.type_map.get(col.fieldtype)[0]
+				not in ("text", "longtext")
+			)
+		):
 			# nosemgrep
 			frappe.db.sql(create_index_query)
 
@@ -76,11 +79,10 @@ class PostgresTable(DBTable):
 		for col in self.columns.values():
 			col.build_for_alter_table(self.current_columns.get(col.fieldname.lower()))
 
-		query = []
-
-		for col in self.add_column:
-			query.append(f"ADD COLUMN `{col.fieldname}` {col.get_definition()}")
-
+		query = [
+			f"ADD COLUMN `{col.fieldname}` {col.get_definition()}"
+			for col in self.add_column
+		]
 		for col in self.change_type:
 			using_clause = ""
 			if col.fieldtype in ("Datetime"):
@@ -117,15 +119,16 @@ class PostgresTable(DBTable):
 
 			query.append(f"ALTER COLUMN `{col.fieldname}` SET DEFAULT {col_default}")
 
-		create_contraint_query = ""
-		for col in self.add_index:
-			# if index key not exists
-			create_contraint_query += (
+		create_contraint_query = "".join(
+			(
 				'CREATE INDEX IF NOT EXISTS "{index_name}" ON `{table_name}`(`{field}`);'.format(
-					index_name=col.fieldname, table_name=self.table_name, field=col.fieldname
+					index_name=col.fieldname,
+					table_name=self.table_name,
+					field=col.fieldname,
 				)
 			)
-
+			for col in self.add_index
+		)
 		for col in self.add_unique:
 			# if index key not exists
 			create_contraint_query += (
@@ -134,13 +137,11 @@ class PostgresTable(DBTable):
 				)
 			)
 
-		drop_contraint_query = ""
-		for col in self.drop_index:
-			# primary key
-			if col.fieldname != "name":
-				# if index key exists
-				drop_contraint_query += f'DROP INDEX IF EXISTS "{col.fieldname}" ;'
-
+		drop_contraint_query = "".join(
+			f'DROP INDEX IF EXISTS "{col.fieldname}" ;'
+			for col in self.drop_index
+			if col.fieldname != "name"
+		)
 		for col in self.drop_unique:
 			# primary key
 			if col.fieldname != "name":
@@ -148,7 +149,7 @@ class PostgresTable(DBTable):
 				drop_contraint_query += f'DROP INDEX IF EXISTS "unique_{col.fieldname}" ;'
 		try:
 			if query:
-				final_alter_query = "ALTER TABLE `{}` {}".format(self.table_name, ", ".join(query))
+				final_alter_query = f'ALTER TABLE `{self.table_name}` {", ".join(query)}'
 				# nosemgrep
 				frappe.db.sql(final_alter_query)
 			if create_contraint_query:

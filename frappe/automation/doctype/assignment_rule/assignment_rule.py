@@ -54,9 +54,7 @@ class AssignmentRule(Document):
 		# clear existing assignment, to reassign
 		assign_to.clear(doc.get("doctype"), doc.get("name"))
 
-		user = self.get_user(doc)
-
-		if user:
+		if user := self.get_user(doc):
 			assign_to.add(
 				dict(
 					assign_to=[user],
@@ -105,27 +103,31 @@ class AssignmentRule(Document):
 		if not self.last_user or self.last_user == self.users[-1].user:
 			return self.users[0].user
 
-		# find out the next user in the list
-		for i, d in enumerate(self.users):
-			if self.last_user == d.user:
-				return self.users[i + 1].user
-
-		# bad last user, assign to the first one
-		return self.users[0].user
+		return next(
+			(
+				self.users[i + 1].user
+				for i, d in enumerate(self.users)
+				if self.last_user == d.user
+			),
+			self.users[0].user,
+		)
 
 	def get_user_load_balancing(self):
 		"""Assign to the user with least number of open assignments"""
-		counts = []
-		for d in self.users:
-			counts.append(
-				dict(
-					user=d.user,
-					count=frappe.db.count(
-						"ToDo", dict(reference_type=self.document_type, allocated_to=d.user, status="Open")
+		counts = [
+			dict(
+				user=d.user,
+				count=frappe.db.count(
+					"ToDo",
+					dict(
+						reference_type=self.document_type,
+						allocated_to=d.user,
+						status="Open",
 					),
-				)
+				),
 			)
-
+			for d in self.users
+		]
 		# sort by dict value
 		sorted_counts = sorted(counts, key=lambda k: k["count"])
 
@@ -207,14 +209,12 @@ def reopen_closed_assignment(doc):
 def apply(doc=None, method=None, doctype=None, name=None):
 	doctype = doctype or doc.doctype
 
-	skip_assignment_rules = (
+	if skip_assignment_rules := (
 		frappe.flags.in_patch
 		or frappe.flags.in_install
 		or frappe.flags.in_setup_wizard
 		or doctype in log_types
-	)
-
-	if skip_assignment_rules:
+	):
 		return
 
 	if not doc and doctype and name:
@@ -264,19 +264,13 @@ def apply(doc=None, method=None, doctype=None, name=None):
 			if new_apply:
 				break
 
-	# apply close rule only if assignments exists
-	assignments = get_assignments(doc)
-
-	if assignments:
+	if assignments := get_assignments(doc):
 		for assignment_rule in assignment_rule_docs:
 			if assignment_rule.is_rule_not_applicable_today():
 				continue
 
 			if not new_apply:
-				# only reopen if close condition is not satisfied
-				to_close_todos = assignment_rule.safe_eval("close_condition", doc)
-
-				if to_close_todos:
+				if to_close_todos := assignment_rule.safe_eval("close_condition", doc):
 					# close todo status
 					todos_to_close = frappe.get_all(
 						"ToDo",
@@ -327,13 +321,11 @@ def update_due_date(doc, state=None):
 	for rule in assignment_rules:
 		rule_doc = frappe.get_cached_doc("Assignment Rule", rule.get("name"))
 		due_date_field = rule_doc.due_date_based_on
-		field_updated = (
+		if field_updated := (
 			doc.meta.has_field(due_date_field)
 			and doc.has_value_changed(due_date_field)
 			and rule.get("name")
-		)
-
-		if field_updated:
+		):
 			assignment_todos = frappe.get_all(
 				"ToDo",
 				filters={

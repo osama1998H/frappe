@@ -88,8 +88,8 @@ def send_via_gateway(arg):
 		if 200 <= status < 300:
 			success_list.append(d)
 
-	if len(success_list) > 0:
-		args.update(arg)
+	if success_list:
+		args |= arg
 		create_sms_log(args, success_list)
 		if arg.get("success_msg"):
 			frappe.msgprint(_("SMS sent to following numbers: {0}").format("\n" + "\n".join(success_list)))
@@ -102,7 +102,7 @@ def get_headers(sms_settings=None):
 	headers = {"Accept": "text/plain, text/html, */*"}
 	for d in sms_settings.get("parameters"):
 		if d.header == 1:
-			headers.update({d.parameter: d.value})
+			headers[d.parameter] = d.value
 
 	return headers
 

@@ -177,7 +177,7 @@ class LoginManager:
 			frappe.local.cookie_manager.set_cookie("system_user", "no")
 			if not resume:
 				frappe.local.response["message"] = "No App"
-				frappe.local.response["home_page"] = "/" + get_home_page()
+				frappe.local.response["home_page"] = f"/{get_home_page()}"
 		else:
 			frappe.local.cookie_manager.set_cookie("system_user", "yes")
 			if not resume:
@@ -187,9 +187,7 @@ class LoginManager:
 		if not resume:
 			frappe.response["full_name"] = self.full_name
 
-		# redirect information
-		redirect_to = frappe.cache().hget("redirect_after_login", self.user)
-		if redirect_to:
+		if redirect_to := frappe.cache().hget("redirect_after_login", self.user):
 			frappe.local.response["redirect_to"] = redirect_to
 			frappe.cache().hdel("redirect_after_login", self.user)
 
@@ -261,11 +259,11 @@ class LoginManager:
 		if self.user in frappe.STANDARD_USERS:
 			return False
 
-		reset_pwd_after_days = cint(
-			frappe.db.get_single_value("System Settings", "force_user_to_reset_password")
-		)
-
-		if reset_pwd_after_days:
+		if reset_pwd_after_days := cint(
+			frappe.db.get_single_value(
+				"System Settings", "force_user_to_reset_password"
+			)
+		):
 			last_password_reset_date = (
 				frappe.db.get_value("User", self.user, "last_password_reset_date") or today()
 			)
@@ -542,10 +540,8 @@ class LoginAttemptTracker:
 		login_failed_count = self.login_failed_count or 0
 		current_time = get_datetime()
 
-		if (
-			login_failed_time
-			and login_failed_time + self.lock_interval > current_time
-			and login_failed_count > self.max_failed_logins
-		):
-			return False
-		return True
+		return (
+			not login_failed_time
+			or login_failed_time + self.lock_interval <= current_time
+			or login_failed_count <= self.max_failed_logins
+		)

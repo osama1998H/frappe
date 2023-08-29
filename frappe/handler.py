@@ -42,11 +42,7 @@ def handle():
 	"""handle request"""
 
 	cmd = frappe.local.form_dict.cmd
-	data = None
-
-	if cmd != "login":
-		data = execute_cmd(cmd)
-
+	data = execute_cmd(cmd) if cmd != "login" else None
 	# data can be an empty string or list which are valid responses
 	if data is not None:
 		if isinstance(data, Response):
@@ -66,9 +62,7 @@ def execute_cmd(cmd, from_async=False):
 		cmd = hook
 		break
 
-	# via server script
-	server_script = get_server_script_map().get("_api", {}).get(cmd)
-	if server_script:
+	if server_script := get_server_script_map().get("_api", {}).get(cmd):
 		return run_server_script(server_script)
 
 	try:
@@ -155,11 +149,10 @@ def uploadfile():
 				# ignore pass
 				ret = None
 				frappe.db.rollback()
-		else:
-			if frappe.form_dict.get("method"):
-				method = frappe.get_attr(frappe.form_dict.method)
-				is_whitelisted(method)
-				ret = method()
+		elif frappe.form_dict.get("method"):
+			method = frappe.get_attr(frappe.form_dict.method)
+			is_whitelisted(method)
+			ret = method()
 	except Exception:
 		frappe.errprint(frappe.utils.get_traceback())
 		frappe.response["http_status_code"] = 500
@@ -189,7 +182,6 @@ def upload_file():
 	folder = frappe.form_dict.folder or "Home"
 	method = frappe.form_dict.method
 	filename = frappe.form_dict.file_name
-	optimize = frappe.form_dict.optimize
 	content = None
 
 	if "file" in files:
@@ -198,6 +190,7 @@ def upload_file():
 		filename = file.filename
 
 		content_type = guess_type(filename)[0]
+		optimize = frappe.form_dict.optimize
 		if optimize and content_type.startswith("image/"):
 			args = {"content": content, "content_type": content_type}
 			if frappe.form_dict.max_width:
@@ -216,11 +209,7 @@ def upload_file():
 		if filetype not in ALLOWED_MIMETYPES:
 			frappe.throw(_("You can only upload JPG, PNG, PDF, TXT or Microsoft documents."))
 
-	if method:
-		method = frappe.get_attr(method)
-		is_whitelisted(method)
-		return method()
-	else:
+	if not method:
 		return frappe.get_doc(
 			{
 				"doctype": "File",
@@ -234,6 +223,9 @@ def upload_file():
 				"content": content,
 			}
 		).save(ignore_permissions=ignore_permissions)
+	method = frappe.get_attr(method)
+	is_whitelisted(method)
+	return method()
 
 
 @frappe.whitelist(allow_guest=True)
@@ -257,11 +249,8 @@ def download_file(file_url: str):
 
 def get_attr(cmd):
 	"""get method object from cmd"""
-	if "." in cmd:
-		method = frappe.get_attr(cmd)
-	else:
-		method = globals()[cmd]
-	frappe.log("method:" + cmd)
+	method = frappe.get_attr(cmd) if "." in cmd else globals()[cmd]
+	frappe.log(f"method:{cmd}")
 	return method
 
 

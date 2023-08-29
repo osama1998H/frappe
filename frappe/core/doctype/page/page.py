@@ -30,11 +30,8 @@ class Page(Document):
 					where name like "%s-%%" order by name desc limit 1"""
 					% self.name
 				)
-				if cnt:
-					cnt = cint(cnt[0][0].split("-")[-1]) + 1
-				else:
-					cnt = 1
-				self.name += "-" + str(cnt)
+				cnt = cint(cnt[0][0].split("-")[-1]) + 1 if cnt else 1
+				self.name += f"-{str(cnt)}"
 
 	def validate(self):
 		validate_route_conflict(self.doctype, self.name)
@@ -61,12 +58,10 @@ class Page(Document):
 
 		from frappe.modules.utils import export_module_json
 
-		path = export_module_json(self, self.standard == "Yes", self.module)
-
-		if path:
+		if path := export_module_json(self, self.standard == "Yes", self.module):
 			# js
-			if not os.path.exists(path + ".js"):
-				with open(path + ".js", "w") as f:
+			if not os.path.exists(f"{path}.js"):
+				with open(f"{path}.js", "w") as f:
 					f.write(
 						"""frappe.pages['%s'].on_page_load = function(wrapper) {
 	var page = frappe.ui.make_app_page({
@@ -118,14 +113,14 @@ class Page(Document):
 		path = os.path.join(get_module_path(self.module), "page", page_name)
 
 		# script
-		fpath = os.path.join(path, page_name + ".js")
+		fpath = os.path.join(path, f"{page_name}.js")
 		if os.path.exists(fpath):
 			with open(fpath) as f:
 				self.script = render_include(f.read())
 				self.script += f"\n\n//# sourceURL={page_name}.js"
 
 		# css
-		fpath = os.path.join(path, page_name + ".css")
+		fpath = os.path.join(path, f"{page_name}.css")
 		if os.path.exists(fpath):
 			with open(fpath) as f:
 				self.style = safe_decode(f.read())
@@ -138,13 +133,13 @@ class Page(Document):
 					if "<!-- jinja -->" in template:
 						context = frappe._dict({})
 						try:
-							out = frappe.get_attr(
+							if out := frappe.get_attr(
 								"{app}.{module}.page.{page}.{page}.get_context".format(
-									app=frappe.local.module_app[scrub(self.module)], module=scrub(self.module), page=page_name
+									app=frappe.local.module_app[scrub(self.module)],
+									module=scrub(self.module),
+									page=page_name,
 								)
-							)(context)
-
-							if out:
+							)(context):
 								context = out
 						except (AttributeError, ImportError):
 							pass
@@ -161,12 +156,10 @@ class Page(Document):
 			self.script += get_lang_js("page", self.name)
 
 		for path in get_code_files_via_hooks("page_js", self.name):
-			js = get_js(path)
-			if js:
+			if js := get_js(path):
 				self.script += "\n\n" + js
 
 
 def delete_custom_role(field, docname):
-	name = frappe.db.get_value("Custom Role", {field: docname}, "name")
-	if name:
+	if name := frappe.db.get_value("Custom Role", {field: docname}, "name"):
 		frappe.delete_doc("Custom Role", name)

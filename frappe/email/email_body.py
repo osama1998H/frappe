@@ -192,9 +192,7 @@ class EMail:
 	def set_part_html(self, message, inline_images):
 		from email.mime.text import MIMEText
 
-		has_inline_images = EMBED_PATTERN.search(message)
-
-		if has_inline_images:
+		if has_inline_images := EMBED_PATTERN.search(message):
 			# process inline images
 			message, _inline_images = replace_filename_with_cid(message)
 
@@ -238,11 +236,10 @@ class EMail:
 	def attach_file(self, n):
 		"""attach a file from the `FileData` table"""
 		_file = frappe.get_doc("File", {"file_name": n})
-		content = _file.get_content()
-		if not content:
+		if content := _file.get_content():
+			self.add_attachment(_file.file_name, content)
+		else:
 			return
-
-		self.add_attachment(_file.file_name, content)
 
 	def add_attachment(
 		self, fname, fcontent, content_type=None, parent=None, content_id=None, inline=False
@@ -294,7 +291,7 @@ class EMail:
 
 	def set_message_id(self, message_id, is_notification=False):
 		if message_id:
-			message_id = "<" + message_id + ">"
+			message_id = f"<{message_id}>"
 		else:
 			message_id = get_message_id()
 			self.set_header("isnotification", "<notification>")
@@ -464,7 +461,7 @@ def get_message_id():
 
 def get_signature(email_account):
 	if email_account and email_account.add_signature and email_account.signature:
-		return "<br>" + email_account.signature
+		return f"<br>{email_account.signature}"
 	else:
 		return ""
 
@@ -476,15 +473,13 @@ def get_footer(email_account, footer=None):
 	args = {}
 
 	if email_account and email_account.footer:
-		args.update({"email_account_footer": email_account.footer})
+		args["email_account_footer"] = email_account.footer
 
-	sender_address = frappe.db.get_default("email_footer_address")
-
-	if sender_address:
-		args.update({"sender_address": sender_address})
+	if sender_address := frappe.db.get_default("email_footer_address"):
+		args["sender_address"] = sender_address
 
 	if not cint(frappe.db.get_default("disable_standard_email_footer")):
-		args.update({"default_mail_footer": frappe.get_hooks("default_mail_footer")})
+		args["default_mail_footer"] = frappe.get_hooks("default_mail_footer")
 
 	footer += frappe.utils.jinja.get_email_from_template("email_footer", args)[0]
 

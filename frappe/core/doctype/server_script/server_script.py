@@ -178,9 +178,19 @@ def setup_scheduler_events(script_name, frequency):
 	        frequency (str): Event label compatible with the Frappe scheduler
 	"""
 	method = frappe.scrub(f"{script_name}-{frequency}")
-	scheduled_script = frappe.db.get_value("Scheduled Job Type", {"method": method})
+	if scheduled_script := frappe.db.get_value(
+		"Scheduled Job Type", {"method": method}
+	):
+		doc = frappe.get_doc("Scheduled Job Type", scheduled_script)
 
-	if not scheduled_script:
+		if doc.frequency == frequency:
+			return
+
+		doc.frequency = frequency
+		doc.save()
+
+		frappe.msgprint(_("Scheduled execution for script {0} has updated").format(script_name))
+	else:
 		frappe.get_doc(
 			{
 				"doctype": "Scheduled Job Type",
@@ -191,14 +201,3 @@ def setup_scheduler_events(script_name, frequency):
 		).insert()
 
 		frappe.msgprint(_("Enabled scheduled execution for script {0}").format(script_name))
-
-	else:
-		doc = frappe.get_doc("Scheduled Job Type", scheduled_script)
-
-		if doc.frequency == frequency:
-			return
-
-		doc.frequency = frequency
-		doc.save()
-
-		frappe.msgprint(_("Scheduled execution for script {0} has updated").format(script_name))

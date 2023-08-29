@@ -205,12 +205,10 @@ def _restore(
 		_backup.decryption_rollback()
 		if encryption_key:
 			click.secho("Encrypted backup file detected. Decrypting using provided key.", fg="yellow")
-			_backup.backup_decryption(encryption_key)
-
 		else:
 			click.secho("Encrypted backup file detected. Decrypting using site config.", fg="yellow")
 			encryption_key = get_or_generate_backup_encryption_key()
-			_backup.backup_decryption(encryption_key)
+		_backup.backup_decryption(encryption_key)
 
 		# Rollback on unsuccessful decryrption
 		if not os.path.exists(sql_file_path):
@@ -294,9 +292,7 @@ def _restore(
 		os.remove(private)
 		_backup.decryption_rollback()
 
-	success_message = "Site {} has been restored{}".format(
-		site, " with files" if (with_public_files or with_private_files) else ""
-	)
+	success_message = f'Site {site} has been restored{" with files" if with_public_files or with_private_files else ""}'
 	click.secho(success_message, fg="green")
 
 
@@ -798,9 +794,7 @@ def backup(
 
 		odb.print_summary()
 		click.secho(
-			"Backup for Site {} has been successfully completed{}".format(
-				site, " with files" if with_files else ""
-			),
+			f'Backup for Site {site} has been successfully completed{" with files" if with_files else ""}',
 			fg="green",
 		)
 		frappe.destroy()
@@ -912,9 +906,7 @@ def _drop_site(
 			odb = scheduled_backup(ignore_files=False, ignore_conf=True, force=True, verbose=True)
 			odb.print_summary()
 	except Exception as err:
-		if force:
-			pass
-		else:
+		if not force:
 			messages = [
 				"=" * 80,
 				f"Error: The operation has stopped because backup of {site}'s database failed.",
@@ -1153,8 +1145,8 @@ def start_ngrok(context, bind_tls, use_default_authtoken):
 	site = get_site(context)
 	frappe.init(site=site)
 
-	ngrok_authtoken = frappe.conf.ngrok_authtoken
 	if not use_default_authtoken:
+		ngrok_authtoken = frappe.conf.ngrok_authtoken
 		if not ngrok_authtoken:
 			click.echo(
 				f"\n{click.style('ngrok_authtoken', fg='yellow')} not found in site config.\n"
@@ -1290,19 +1282,20 @@ def trim_database(context, dry_run, format, no_backup, yes=False):
 			if not x.startswith("tab"):
 				continue
 			doctype = x.replace("tab", "", 1)
-			if not (doctype in doctype_tables or x.startswith("__") or x in STANDARD_TABLES):
+			if (
+				doctype not in doctype_tables
+				and not x.startswith("__")
+				and x not in STANDARD_TABLES
+			):
 				TABLES_TO_DROP.append(x)
 
-		if not TABLES_TO_DROP:
-			if format == "text":
-				click.secho(f"No ghost tables found in {frappe.local.site}...Great!", fg="green")
-		else:
+		if TABLES_TO_DROP:
 			if not yes:
 				print("Following tables will be dropped:")
 				print("\n".join(f"* {dt}" for dt in TABLES_TO_DROP))
 				click.confirm("Do you want to continue?", abort=True)
 
-			if not (no_backup or dry_run):
+			if not no_backup and not dry_run:
 				if format == "text":
 					print(f"Backing Up Tables: {', '.join(TABLES_TO_DROP)}")
 
@@ -1323,6 +1316,8 @@ def trim_database(context, dry_run, format, no_backup, yes=False):
 					frappe.db.sql_ddl(f"drop table `{table}`")
 
 			ALL_DATA[frappe.local.site] = TABLES_TO_DROP
+		elif format == "text":
+			click.secho(f"No ghost tables found in {frappe.local.site}...Great!", fg="green")
 		frappe.destroy()
 
 	if format == "json":
@@ -1347,8 +1342,7 @@ def get_standard_tables():
 	content = open(sql_file).read().splitlines()
 
 	for line in content:
-		table_found = re.search(r"""CREATE TABLE ("|`)(.*)?("|`) \(""", line)
-		if table_found:
+		if table_found := re.search(r"""CREATE TABLE ("|`)(.*)?("|`) \(""", line):
 			tables.append(table_found.group(2))
 
 	return tables

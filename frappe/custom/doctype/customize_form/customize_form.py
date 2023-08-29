@@ -313,15 +313,13 @@ class CustomizeForm(Document):
 					for prop, prop_type in field_map.items():
 						if d.get(prop) != original.get(prop):
 							self.make_property_setter(prop, d.get(prop), prop_type, apply_on=doctype, row_name=d.name)
-					items.append(d.name)
 				else:
 					# custom - just insert/update
 					d.parent = self.doc_type
 					d.custom = 1
 					d.save(ignore_permissions=True)
 					has_custom = True
-					items.append(d.name)
-
+				items.append(d.name)
 			self.update_order_property_setter(has_custom, fieldname)
 			self.clear_removed_items(doctype, items)
 
@@ -449,23 +447,23 @@ class CustomizeForm(Document):
 	def get_existing_property_value(self, property_name, fieldname=None):
 		# check if there is any need to make property setter!
 		if fieldname:
-			property_value = frappe.db.get_value(
-				"DocField", {"parent": self.doc_type, "fieldname": fieldname}, property_name
+			return frappe.db.get_value(
+				"DocField",
+				{"parent": self.doc_type, "fieldname": fieldname},
+				property_name,
 			)
 		else:
-			if frappe.db.has_column("DocType", property_name):
-				property_value = frappe.db.get_value("DocType", self.doc_type, property_name)
-			else:
-				property_value = None
-
-		return property_value
+			return (
+				frappe.db.get_value("DocType", self.doc_type, property_name)
+				if frappe.db.has_column("DocType", property_name)
+				else None
+			)
 
 	def validate_fieldtype_change(self, df, old_value, new_value):
 		if df.is_virtual:
 			return
 
-		allowed = self.allow_fieldtype_change(old_value, new_value)
-		if allowed:
+		if allowed := self.allow_fieldtype_change(old_value, new_value):
 			old_value_length = cint(frappe.db.type_map.get(old_value)[1])
 			new_value_length = cint(frappe.db.type_map.get(new_value)[1])
 
@@ -499,13 +497,13 @@ class CustomizeForm(Document):
 				),
 				as_dict=True,
 			)
-			links = []
 			label = df.label
-			for doc in docs:
-				links.append(frappe.utils.get_link_to_form(self.doc_type, doc.name))
-			links_str = ", ".join(links)
-
+			links = [
+				frappe.utils.get_link_to_form(self.doc_type, doc.name) for doc in docs
+			]
 			if docs:
+				links_str = ", ".join(links)
+
 				frappe.throw(
 					_(
 						"Value for field {0} is too long in {1}. Length should be lesser than {2} characters"

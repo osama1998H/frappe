@@ -161,9 +161,8 @@ class EmailServer:
 			if self.is_temporary_system_problem(e):
 				return False
 
-			else:
-				frappe.msgprint(_("Invalid User Name or Support Password. Please rectify and try again."))
-				raise
+			frappe.msgprint(_("Invalid User Name or Support Password. Please rectify and try again."))
+			raise
 
 	def select_imap_folder(self, folder):
 		res = self.imap.select(f'"{folder}"')
@@ -200,9 +199,7 @@ class EmailServer:
 			num = num_copy = len(email_list)
 
 			# WARNING: Hard coded max no. of messages to be popped
-			if num > 50:
-				num = 50
-
+			num = min(num, 50)
 			# size limits
 			self.total_size = 0
 			self.max_email_size = cint(frappe.local.conf.get("max_email_size"))
@@ -222,35 +219,31 @@ class EmailServer:
 						self.pop.dele(m)
 
 		except Exception as e:
-			if self.has_login_limit_exceeded(e):
-				pass
-			else:
+			if not self.has_login_limit_exceeded(e):
 				raise
 
 		out = {"latest_messages": self.latest_messages}
 		if self.settings.use_imap:
-			out.update(
-				{"uid_list": uid_list, "seen_status": self.seen_status, "uid_reindexed": self.uid_reindexed}
-			)
+			out |= {
+				"uid_list": uid_list,
+				"seen_status": self.seen_status,
+				"uid_reindexed": self.uid_reindexed,
+			}
 
 		return out
 
 	def get_new_mails(self, folder):
 		"""Return list of new mails"""
-		if cint(self.settings.use_imap):
-			email_list = []
-			self.check_imap_uidvalidity(folder)
+		if not cint(self.settings.use_imap):
+			return self.pop.list()[1]
 
-			readonly = False if self.settings.email_sync_rule == "UNSEEN" else True
+		self.check_imap_uidvalidity(folder)
 
-			self.imap.select(folder, readonly=readonly)
-			response, message = self.imap.uid("search", None, self.settings.email_sync_rule)
-			if message[0]:
-				email_list = message[0].split()
-		else:
-			email_list = self.pop.list()[1]
+		readonly = self.settings.email_sync_rule != "UNSEEN"
 
-		return email_list
+		self.imap.select(folder, readonly=readonly)
+		response, message = self.imap.uid("search", None, self.settings.email_sync_rule)
+		return message[0].split() if message[0] else []
 
 	def check_imap_uidvalidity(self, folder):
 		# compare the UIDVALIDITY of email account and imap server
@@ -262,48 +255,44 @@ class EmailServer:
 		uidnext = int(self.parse_imap_response("UIDNEXT", message[0]) or "1")
 		frappe.db.set_value("Email Account", self.settings.email_account, "uidnext", uidnext)
 
-		if not uid_validity or uid_validity != current_uid_validity:
-			# uidvalidity changed & all email uids are reindexed by server
-			Communication = frappe.qb.DocType("Communication")
-			frappe.qb.update(Communication).set(Communication.uid, -1).where(
-				Communication.communication_medium == "Email"
-			).where(Communication.email_account == self.settings.email_account).run()
-
-			if self.settings.use_imap:
-				# new update for the IMAP Folder DocType
-				IMAPFolder = frappe.qb.DocType("IMAP Folder")
-				frappe.qb.update(IMAPFolder).set(IMAPFolder.uidvalidity, current_uid_validity).set(
-					IMAPFolder.uidnext, uidnext
-				).where(IMAPFolder.parent == self.settings.email_account_name).where(
-					IMAPFolder.folder_name == folder
-				).run()
-			else:
-				EmailAccount = frappe.qb.DocType("Email Account")
-				frappe.qb.update(EmailAccount).set(EmailAccount.uidvalidity, current_uid_validity).set(
-					EmailAccount.uidnext, uidnext
-				).where(EmailAccount.name == self.settings.email_account_name).run()
-
-			# uid validity not found pulling emails for first time
-			if not uid_validity:
-				self.settings.email_sync_rule = "UNSEEN"
-				return
-
-			sync_count = 100 if uid_validity else int(self.settings.initial_sync_count)
-			from_uid = (
-				1 if uidnext < (sync_count + 1) or (uidnext - sync_count) < 1 else uidnext - sync_count
-			)
-			# sync last 100 email
-			self.settings.email_sync_rule = f"UID {from_uid}:{uidnext}"
-			self.uid_reindexed = True
-
-		elif uid_validity == current_uid_validity:
+		if uid_validity and uid_validity == current_uid_validity:
 			return
+		# uidvalidity changed & all email uids are reindexed by server
+		Communication = frappe.qb.DocType("Communication")
+		frappe.qb.update(Communication).set(Communication.uid, -1).where(
+			Communication.communication_medium == "Email"
+		).where(Communication.email_account == self.settings.email_account).run()
+
+		if self.settings.use_imap:
+			# new update for the IMAP Folder DocType
+			IMAPFolder = frappe.qb.DocType("IMAP Folder")
+			frappe.qb.update(IMAPFolder).set(IMAPFolder.uidvalidity, current_uid_validity).set(
+				IMAPFolder.uidnext, uidnext
+			).where(IMAPFolder.parent == self.settings.email_account_name).where(
+				IMAPFolder.folder_name == folder
+			).run()
+		else:
+			EmailAccount = frappe.qb.DocType("Email Account")
+			frappe.qb.update(EmailAccount).set(EmailAccount.uidvalidity, current_uid_validity).set(
+				EmailAccount.uidnext, uidnext
+			).where(EmailAccount.name == self.settings.email_account_name).run()
+
+		# uid validity not found pulling emails for first time
+		if not uid_validity:
+			self.settings.email_sync_rule = "UNSEEN"
+			return
+
+		sync_count = 100 if uid_validity else int(self.settings.initial_sync_count)
+		from_uid = (
+			1 if uidnext < (sync_count + 1) or (uidnext - sync_count) < 1 else uidnext - sync_count
+		)
+		# sync last 100 email
+		self.settings.email_sync_rule = f"UID {from_uid}:{uidnext}"
+		self.uid_reindexed = True
 
 	def parse_imap_response(self, cmd, response):
 		pattern = rf"(?<={cmd} )[0-9]*"
-		match = re.search(pattern, response.decode("utf-8"), re.U | re.I)
-
-		if match:
+		if match := re.search(pattern, response.decode("utf-8"), re.U | re.I):
 			return match.group(0)
 		else:
 			return None
@@ -329,28 +318,24 @@ class EmailServer:
 
 		except Exception as e:
 			if self.has_login_limit_exceeded(e):
-				self.errors = True
 				raise LoginLimitExceeded(e)
 
-			else:
-				# log performs rollback and logs error in Error Log
-				self.log_error("Unable to fetch email", self.make_error_msg(msg_num, incoming_mail))
-				self.errors = True
-				frappe.db.rollback()
+			# log performs rollback and logs error in Error Log
+			self.log_error("Unable to fetch email", self.make_error_msg(msg_num, incoming_mail))
+			frappe.db.rollback()
 
-				if not cint(self.settings.use_imap):
-					self.pop.dele(msg_num)
-				else:
-					# mark as seen if email sync rule is UNSEEN (syncing only unseen mails)
-					if self.settings.email_sync_rule == "UNSEEN":
-						self.imap.uid("STORE", message_meta, "+FLAGS", "(\\SEEN)")
-		else:
-			if not cint(self.settings.use_imap):
-				self.pop.dele(msg_num)
-			else:
+			if cint(self.settings.use_imap):
 				# mark as seen if email sync rule is UNSEEN (syncing only unseen mails)
 				if self.settings.email_sync_rule == "UNSEEN":
 					self.imap.uid("STORE", message_meta, "+FLAGS", "(\\SEEN)")
+			else:
+				self.pop.dele(msg_num)
+			self.errors = True
+		else:
+			if not cint(self.settings.use_imap):
+				self.pop.dele(msg_num)
+			elif self.settings.email_sync_rule == "UNSEEN":
+				self.imap.uid("STORE", message_meta, "+FLAGS", "(\\SEEN)")
 
 	def get_email_seen_status(self, uid, flag_string):
 		"""parse the email FLAGS response"""
@@ -375,10 +360,11 @@ class EmailServer:
 			"-ERR [SYS/TEMP] Temporary system problem. Please try again later.",
 			"Connection timed out",
 		)
-		for message in messages:
-			if message in strip(cstr(e)) or message in strip(cstr(getattr(e, "strerror", ""))):
-				return True
-		return False
+		return any(
+			message in strip(cstr(e))
+			or message in strip(cstr(getattr(e, "strerror", "")))
+			for message in messages
+		)
 
 	def validate_message_limits(self, message_meta):
 		# throttle based on email size
@@ -388,12 +374,11 @@ class EmailServer:
 		m, size = message_meta.split()
 		size = cint(size)
 
-		if size < self.max_email_size:
-			self.total_size += size
-			if self.total_size > self.max_total_size:
-				raise TotalSizeExceededError
-		else:
+		if size >= self.max_email_size:
 			raise EmailSizeExceededError
+		self.total_size += size
+		if self.total_size > self.max_total_size:
+			raise TotalSizeExceededError
 
 	def make_error_msg(self, msg_num, incoming_mail):
 		error_msg = "Error in retrieving email."
@@ -510,15 +495,12 @@ class Email:
 	def decode_email(self, email):
 		if not email:
 			return
-		decoded = ""
-		for part, encoding in decode_header(
-			frappe.as_unicode(email).replace('"', " ").replace("'", " ")
-		):
-			if encoding:
-				decoded += part.decode(encoding)
-			else:
-				decoded += safe_decode(part)
-		return decoded
+		return "".join(
+			part.decode(encoding) if encoding else safe_decode(part)
+			for part, encoding in decode_header(
+				frappe.as_unicode(email).replace('"', " ").replace("'", " ")
+			)
+		)
 
 	def set_content_and_type(self):
 		self.content, self.content_type = "[Blank Email]", "text/plain"
@@ -556,8 +538,7 @@ class Email:
 		message = list(part.walk())[1]
 		headers = []
 		for key in ("From", "To", "Subject", "Date"):
-			value = cstr(message.get(key))
-			if value:
+			if value := cstr(message.get(key)):
 				headers.append(f"{_(key)}: {escape(value)}")
 
 		self.text_content += "\n".join(headers)
@@ -586,10 +567,7 @@ class Email:
 			return part.get_payload()
 
 	def get_attachment(self, part):
-		# charset = self.get_charset(part)
-		fcontent = part.get_payload(decode=True)
-
-		if fcontent:
+		if fcontent := part.get_payload(decode=True):
 			content_type = part.get_content_type()
 			fname = part.get_filename()
 			if fname:
@@ -612,8 +590,7 @@ class Email:
 				}
 			)
 
-			cid = (cstr(part.get("Content-Id")) or "").strip("><")
-			if cid:
+			if cid := (cstr(part.get("Content-Id")) or "").strip("><"):
 				self.cid_map[fname] = cid
 
 	def save_attachments_in_doc(self, doc):
@@ -686,8 +663,7 @@ class InboundMail(Email):
 				print("WARN: Cannot pull email. Sender same as recipient inbox")
 			raise SentEmailInInboxError
 
-		communication = self.is_exist_in_system()
-		if communication:
+		if communication := self.is_exist_in_system():
 			communication.update_db(uid=self.uid)
 			communication.reload()
 			return communication
@@ -709,8 +685,7 @@ class InboundMail(Email):
 			data["reference_name"] = self.reference_document().name
 		else:
 			if append_to and append_to != "Communication":
-				reference_doc = self._create_reference_document(append_to)
-				if reference_doc:
+				if reference_doc := self._create_reference_document(append_to):
 					data["reference_doctype"] = reference_doc.doctype
 					data["reference_name"] = reference_doc.name
 			data["is_first"] = True
@@ -892,11 +867,10 @@ class InboundMail(Email):
 		try:
 			parent.insert(ignore_permissions=True)
 		except frappe.DuplicateEntryError:
-			# try and find matching parent
-			parent_name = frappe.db.get_value(
-				self.email_account.append_to, {email_fileds.sender_field: self.from_email}
-			)
-			if parent_name:
+			if parent_name := frappe.db.get_value(
+				self.email_account.append_to,
+				{email_fileds.sender_field: self.from_email},
+			):
 				parent.name = parent_name
 			else:
 				parent = None

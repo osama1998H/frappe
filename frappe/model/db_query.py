@@ -203,20 +203,17 @@ class DatabaseQuery:
 			self.save_user_settings_fields = save_user_settings_fields
 			self.update_user_settings()
 
-		if pluck:
-			return [d[pluck] for d in result]
-
-		return result
+		return [d[pluck] for d in result] if pluck else result
 
 	def build_and_run(self):
 		args = self.prepare_args()
 		args.limit = self.add_limit()
 
 		if args.conditions:
-			args.conditions = "where " + args.conditions
+			args.conditions = f"where {args.conditions}"
 
 		if self.distinct:
-			args.fields = "distinct " + args.fields
+			args.fields = f"distinct {args.fields}"
 			args.order_by = ""  # TODO: recheck for alternative
 
 		# Postgres requires any field that appears in the select clause to also
@@ -309,10 +306,10 @@ class DatabaseQuery:
 		self.set_order_by(args)
 
 		self.validate_order_by_and_group_by(args.order_by)
-		args.order_by = args.order_by and (" order by " + args.order_by) or ""
+		args.order_by = args.order_by and f" order by {args.order_by}" or ""
 
 		self.validate_order_by_and_group_by(self.group_by)
-		args.group_by = self.group_by and (" group by " + self.group_by) or ""
+		args.group_by = self.group_by and f" group by {self.group_by}" or ""
 
 		return args
 
@@ -370,9 +367,10 @@ class DatabaseQuery:
 
 			if isinstance(filters, dict):
 				fdict = filters
-				filters = []
-				for key, value in fdict.items():
-					filters.append(make_filter_tuple(self.doctype, key, value))
+				filters = [
+					make_filter_tuple(self.doctype, key, value)
+					for key, value in fdict.items()
+				]
 			setattr(self, filter_name, filters)
 
 	def sanitize_fields(self):
@@ -451,26 +449,30 @@ class DatabaseQuery:
 	def extract_tables(self):
 		"""extract tables from fields"""
 		self.tables = [f"`tab{self.doctype}`"]
-		sql_functions = [
-			"dayofyear(",
-			"extract(",
-			"locate(",
-			"strpos(",
-			"count(",
-			"sum(",
-			"avg(",
-		]
 		# add tables from fields
 		if self.fields:
+			sql_functions = [
+				"dayofyear(",
+				"extract(",
+				"locate(",
+				"strpos(",
+				"count(",
+				"sum(",
+				"avg(",
+			]
 			for field in self.fields:
-				if not ("tab" in field and "." in field) or any(x for x in sql_functions if x in field):
+				if (
+					"tab" not in field
+					or "." not in field
+					or any(x for x in sql_functions if x in field)
+				):
 					continue
 
 				table_name = field.split(".", 1)[0]
 
 				if table_name.lower().startswith("group_concat("):
 					table_name = table_name[13:]
-				if not table_name[0] == "`":
+				if table_name[0] != "`":
 					table_name = f"`{table_name}`"
 				if table_name not in self.tables and table_name not in (
 					d.table_name for d in self.link_tables
@@ -533,10 +535,9 @@ class DatabaseQuery:
 		# remove from fields
 		to_remove = []
 		for fld in self.fields:
-			for f in optional_fields:
-				if f in fld and not f in self.columns:
-					to_remove.append(fld)
-
+			to_remove.extend(
+				fld for f in optional_fields if f in fld and f not in self.columns
+			)
 		for fld in to_remove:
 			del self.fields[self.fields.index(fld)]
 
@@ -546,10 +547,11 @@ class DatabaseQuery:
 			if isinstance(each, str):
 				each = [each]
 
-			for element in each:
-				if element in optional_fields and element not in self.columns:
-					to_remove.append(each)
-
+			to_remove.extend(
+				each
+				for element in each
+				if element in optional_fields and element not in self.columns
+			)
 		for each in to_remove:
 			if isinstance(self.filters, dict):
 				del self.filters[each]
@@ -564,8 +566,7 @@ class DatabaseQuery:
 
 		# match conditions
 		if not self.flags.ignore_permissions:
-			match_conditions = self.build_match_conditions()
-			if match_conditions:
+			if match_conditions := self.build_match_conditions():
 				self.conditions.append(f"({match_conditions})")
 
 	def build_filter_conditions(self, filters, conditions: list, ignore_permissions=None):
@@ -604,9 +605,9 @@ class DatabaseQuery:
 		if self.flags.ignore_permissions:
 			return
 
-		asterisk_fields = []
 		permitted_fields = get_permitted_fields(doctype=self.doctype, parenttype=self.parent_doctype)
 
+		asterisk_fields = []
 		for i, field in enumerate(self.fields):
 			if "distinct" in field.lower():
 				# field: 'count(distinct `tabPhoto`.name) as total_count'
@@ -627,49 +628,48 @@ class DatabaseQuery:
 				asterisk_fields.append(i)
 				continue
 
-			# handle pseudo columns
 			elif not column or column.isnumeric():
 				continue
 
-			# labels / pseudo columns or frappe internals
 			elif column[0] in {"'", '"'} or column in optional_fields:
 				continue
 
-			# handle child / joined table fields
 			elif "." in field:
 				table, column = column.split(".", 1)
 				ch_doctype = table.replace("`", "").replace("tab", "", 1)
 
-				if wrap_grave_quotes(table) in self.tables:
-					permitted_child_table_fields = get_permitted_fields(
-						doctype=ch_doctype, parenttype=self.doctype
-					)
-					if column in permitted_child_table_fields or column in optional_fields:
-						continue
-					else:
-						self.remove_field(i)
-				else:
+				if wrap_grave_quotes(table) not in self.tables:
 					raise frappe.PermissionError(ch_doctype)
 
+				permitted_child_table_fields = get_permitted_fields(
+					doctype=ch_doctype, parenttype=self.doctype
+				)
+				if (
+					column not in permitted_child_table_fields
+					and column not in optional_fields
+				):
+					self.remove_field(i)
 			elif column in permitted_fields:
 				continue
 
-			# field inside function calls / * handles things like count(*)
 			elif "(" in field:
 				if "*" in field:
 					continue
 				elif _params := FN_PARAMS_PATTERN.findall(field):
 					params = (x.strip() for x in _params[0].split(","))
 					for param in params:
-						if not (
-							not param or param in permitted_fields or param.isnumeric() or "'" in param or '"' in param
+						if (
+							param
+							and param not in permitted_fields
+							and not param.isnumeric()
+							and "'" not in param
+							and '"' not in param
 						):
 							self.remove_field(i)
 							break
 					continue
 				self.remove_field(i)
 
-			# remove if access not allowed
 			else:
 				self.remove_field(i)
 
@@ -691,7 +691,7 @@ class DatabaseQuery:
 		additional_filters_config = get_additional_filters_from_hooks()
 		f = get_filter(self.doctype, f, additional_filters_config)
 
-		tname = "`tab" + f.doctype + "`"
+		tname = f"`tab{f.doctype}`"
 		if tname not in self.tables:
 			self.append_table(tname)
 
@@ -729,11 +729,7 @@ class DatabaseQuery:
 
 			fallback = "''"
 			value = [frappe.db.escape((cstr(v.name) or "").strip(), percent=False) for v in result]
-			if len(value):
-				value = f"({', '.join(value)})"
-			else:
-				value = "('')"
-
+			value = f"({', '.join(value)})" if len(value) else "('')"
 			# changing operator to IN as the above code fetches all the parent / child values and convert into tuple
 			# which can be directly used with IN operator to query.
 			f.operator = (
@@ -753,11 +749,7 @@ class DatabaseQuery:
 
 			fallback = "''"
 			value = [frappe.db.escape((cstr(v) or "").strip(), percent=False) for v in values]
-			if len(value):
-				value = f"({', '.join(value)})"
-			else:
-				value = "('')"
-
+			value = f"({', '.join(value)})" if len(value) else "('')"
 		else:
 			df = meta.get("fields", {"fieldname": f.fieldname})
 			df = df[0] if df else None
@@ -777,18 +769,19 @@ class DatabaseQuery:
 
 			elif f.operator.lower() in ("between") and (
 				f.fieldname in ("creation", "modified")
-				or (df and (df.fieldtype == "Date" or df.fieldtype == "Datetime"))
+				or df
+				and df.fieldtype in ["Date", "Datetime"]
 			):
 
 				value = get_between_date_filter(f.value, df)
 				fallback = f"'{FallBackDateTimeStr}'"
 
 			elif f.operator.lower() == "is":
-				if f.value == "set":
-					f.operator = "!="
-				elif f.value == "not set":
+				if f.value == "not set":
 					f.operator = "="
 
+				elif f.value == "set":
+					f.operator = "!="
 				value = ""
 				fallback = "''"
 				can_be_null = True
@@ -843,18 +836,16 @@ class DatabaseQuery:
 				value = f"{frappe.db.escape(value, percent=False)}"
 
 		if (
-			self.ignore_ifnull
-			or not can_be_null
-			or (f.value and f.operator.lower() in ("=", "like"))
-			or "ifnull(" in column_name.lower()
+			not self.ignore_ifnull
+			and can_be_null
+			and (not f.value or f.operator.lower() not in ("=", "like"))
+			and "ifnull(" not in column_name.lower()
 		):
-			if f.operator.lower() == "like" and frappe.conf.get("db_type") == "postgres":
-				f.operator = "ilike"
-			condition = f"{column_name} {f.operator} {value}"
-		else:
-			condition = f"ifnull({column_name}, {fallback}) {f.operator} {value}"
+			return f"ifnull({column_name}, {fallback}) {f.operator} {value}"
 
-		return condition
+		if f.operator.lower() == "like" and frappe.conf.get("db_type") == "postgres":
+			f.operator = "ilike"
+		return f"{column_name} {f.operator} {value}"
 
 	def build_match_conditions(self, as_condition=True) -> str | list:
 		"""add match conditions if applicable"""
@@ -872,47 +863,46 @@ class DatabaseQuery:
 
 		if (
 			not self.doctype_meta.istable
-			and not (role_permissions.get("select") or role_permissions.get("read"))
+			and not role_permissions.get("select")
+			and not role_permissions.get("read")
 			and not self.flags.ignore_permissions
-			and not has_any_user_permission_for_doctype(self.doctype, self.user, self.reference_doctype)
+			and not has_any_user_permission_for_doctype(
+				self.doctype, self.user, self.reference_doctype
+			)
 		):
 			only_if_shared = True
-			if not self.shared:
-				frappe.throw(_("No permission to read {0}").format(_(self.doctype)), frappe.PermissionError)
-			else:
+			if self.shared:
 				self.conditions.append(self.get_share_condition())
 
-		else:
-			# skip user perm check if owner constraint is required
-			if requires_owner_constraint(role_permissions):
-				self.match_conditions.append(
-					f"`tab{self.doctype}`.`owner` = {frappe.db.escape(self.user, percent=False)}"
-				)
+			else:
+				frappe.throw(_("No permission to read {0}").format(_(self.doctype)), frappe.PermissionError)
+		elif requires_owner_constraint(role_permissions):
+			self.match_conditions.append(
+				f"`tab{self.doctype}`.`owner` = {frappe.db.escape(self.user, percent=False)}"
+			)
 
-			# add user permission only if role has read perm
-			elif role_permissions.get("read") or role_permissions.get("select"):
-				# get user permissions
-				user_permissions = frappe.permissions.get_user_permissions(self.user)
-				self.add_user_permissions(user_permissions)
+		elif role_permissions.get("read") or role_permissions.get("select"):
+			# get user permissions
+			user_permissions = frappe.permissions.get_user_permissions(self.user)
+			self.add_user_permissions(user_permissions)
 
-		if as_condition:
-			conditions = ""
-			if self.match_conditions:
-				# will turn out like ((blog_post in (..) and blogger in (...)) or (blog_category in (...)))
-				conditions = "((" + ") or (".join(self.match_conditions) + "))"
-
-			doctype_conditions = self.get_permission_query_conditions()
-			if doctype_conditions:
-				conditions += (" and " + doctype_conditions) if conditions else doctype_conditions
-
-			# share is an OR condition, if there is a role permission
-			if not only_if_shared and self.shared and conditions:
-				conditions = f"(({conditions}) or ({self.get_share_condition()}))"
-
-			return conditions
-
-		else:
+		if not as_condition:
 			return self.match_filters
+		conditions = (
+			"((" + ") or (".join(self.match_conditions) + "))"
+			if self.match_conditions
+			else ""
+		)
+		if doctype_conditions := self.get_permission_query_conditions():
+			conditions += (
+				f" and {doctype_conditions}" if conditions else doctype_conditions
+			)
+
+		# share is an OR condition, if there is a role permission
+		if not only_if_shared and self.shared and conditions:
+			conditions = f"(({conditions}) or ({self.get_share_condition()}))"
+
+		return conditions
 
 	def get_share_condition(self):
 		return (
@@ -938,9 +928,7 @@ class DatabaseQuery:
 			if df.get("ignore_user_permissions"):
 				continue
 
-			user_permission_values = user_permissions.get(df.get("options"), {})
-
-			if user_permission_values:
+			if user_permission_values := user_permissions.get(df.get("options"), {}):
 				docs = []
 				if frappe.get_system_settings("apply_strict_user_permissions"):
 					condition = ""
@@ -948,7 +936,7 @@ class DatabaseQuery:
 					empty_value_condition = cast_name(
 						f"ifnull(`tab{self.doctype}`.`{df.get('fieldname')}`, '')=''"
 					)
-					condition = empty_value_condition + " or "
+					condition = f"{empty_value_condition} or "
 
 				for permission in user_permission_values:
 					if not permission.get("applicable_for"):
@@ -980,18 +968,20 @@ class DatabaseQuery:
 
 	def get_permission_query_conditions(self):
 		conditions = []
-		condition_methods = frappe.get_hooks("permission_query_conditions", {}).get(self.doctype, [])
-		if condition_methods:
+		if condition_methods := frappe.get_hooks(
+			"permission_query_conditions", {}
+		).get(self.doctype, []):
 			for method in condition_methods:
-				c = frappe.call(frappe.get_attr(method), self.user)
-				if c:
+				if c := frappe.call(frappe.get_attr(method), self.user):
 					conditions.append(c)
 
-		permision_script_name = get_server_script_map().get("permission_query", {}).get(self.doctype)
-		if permision_script_name:
+		if (
+			permision_script_name := get_server_script_map()
+			.get("permission_query", {})
+			.get(self.doctype)
+		):
 			script = frappe.get_doc("Server Script", permision_script_name)
-			condition = script.get_permission_query_conditions(self.user)
-			if condition:
+			if condition := script.get_permission_query_conditions(self.user):
 				conditions.append(condition)
 
 		return " and ".join(conditions) if conditions else ""
@@ -1056,9 +1046,7 @@ class DatabaseQuery:
 		for field in parameters.split(","):
 			field = field.strip()
 			function = field.split("(", 1)[0].rstrip().lower()
-			full_field_name = "." in field and field.startswith("`tab")
-
-			if full_field_name:
+			if full_field_name := "." in field and field.startswith("`tab"):
 				tbl = field.split(".", 1)[0]
 				if tbl not in self.tables:
 					if tbl.startswith("`"):
@@ -1190,11 +1178,11 @@ def has_any_user_permission_for_doctype(doctype, user, applicable_for):
 	user_permissions = frappe.permissions.get_user_permissions(user=user)
 	doctype_user_permissions = user_permissions.get(doctype, [])
 
-	for permission in doctype_user_permissions:
-		if not permission.applicable_for or permission.applicable_for == applicable_for:
-			return True
-
-	return False
+	return any(
+		not permission.applicable_for
+		or permission.applicable_for == applicable_for
+		for permission in doctype_user_permissions
+	)
 
 
 def get_between_date_filter(value, df=None):
@@ -1211,18 +1199,14 @@ def get_between_date_filter(value, df=None):
 		if len(value) >= 2:
 			to_date = value[1]
 
-	if not df or (df and df.fieldtype == "Datetime"):
+	if not df or df.fieldtype == "Datetime":
 		to_date = add_to_date(to_date, days=1)
 
-	if df and df.fieldtype == "Datetime":
-		data = "'{}' AND '{}'".format(
-			frappe.db.format_datetime(from_date),
-			frappe.db.format_datetime(to_date),
-		)
-	else:
-		data = f"'{frappe.db.format_date(from_date)}' AND '{frappe.db.format_date(to_date)}'"
-
-	return data
+	return (
+		f"'{frappe.db.format_datetime(from_date)}' AND '{frappe.db.format_datetime(to_date)}'"
+		if df and df.fieldtype == "Datetime"
+		else f"'{frappe.db.format_date(from_date)}' AND '{frappe.db.format_date(to_date)}'"
+	)
 
 
 def get_additional_filter_field(additional_filters_config, f, value):
@@ -1237,19 +1221,19 @@ def get_additional_filter_field(additional_filters_config, f, value):
 
 
 def get_date_range(operator: str, value: str):
-	timespan_map = {
-		"1 week": "week",
-		"1 month": "month",
-		"3 months": "quarter",
-		"6 months": "6 months",
-		"1 year": "year",
-	}
-	period_map = {
-		"previous": "last",
-		"next": "next",
-	}
-
 	if operator != "timespan":
+		timespan_map = {
+			"1 week": "week",
+			"1 month": "month",
+			"3 months": "quarter",
+			"6 months": "6 months",
+			"1 year": "year",
+		}
+		period_map = {
+			"previous": "last",
+			"next": "next",
+		}
+
 		timespan = f"{period_map[operator]} {timespan_map[value]}"
 	else:
 		timespan = value
@@ -1284,10 +1268,7 @@ def wrap_grave_quotes(table: str) -> str:
 
 
 def is_plain_field(field: str) -> bool:
-	for char in field:
-		if char in SPECIAL_FIELD_CHARS:
-			return False
-	return True
+	return all(char not in SPECIAL_FIELD_CHARS for char in field)
 
 
 def in_function(substr: str, field: str) -> bool:
@@ -1299,6 +1280,4 @@ def in_function(substr: str, field: str) -> bool:
 
 def strip_alias(field: str) -> str:
 	# Note: Currently only supports aliases that use the " AS " syntax
-	if " as " in field.lower():
-		return field.split(" as ", 1)[0]
-	return field
+	return field.split(" as ", 1)[0] if " as " in field.lower() else field

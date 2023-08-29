@@ -298,8 +298,8 @@ def get_params(user, doctype, docname, is_default=0, hide_descendants=0, applica
 		"hide_descendants": hide_descendants,
 	}
 	if applicable:
-		param.update({"apply_to_all_doctypes": 0})
-		param.update({"applicable_doctypes": applicable})
+		param["apply_to_all_doctypes"] = 0
+		param["applicable_doctypes"] = applicable
 	return param
 
 
@@ -311,7 +311,7 @@ def get_exists_param(user, applicable=None):
 		"for_value": user.name,
 	}
 	if applicable:
-		param.update({"applicable_for": applicable})
+		param["applicable_for"] = applicable
 	else:
-		param.update({"apply_to_all_doctypes": 1})
+		param["apply_to_all_doctypes"] = 1
 	return param

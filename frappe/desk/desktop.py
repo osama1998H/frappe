@@ -132,10 +132,7 @@ class Workspace:
 			return None
 
 		# Check if already complete
-		if doc.check_completion():
-			return None
-
-		return doc
+		return None if doc.check_completion() else doc
 
 	def is_item_allowed(self, name, item_type):
 		if frappe.session.user == "Administrator":
@@ -149,12 +146,7 @@ class Workspace:
 			return name in self.allowed_pages and name in self.restricted_pages
 		if item_type == "report":
 			return name in self.allowed_reports
-		if item_type == "help":
-			return True
-		if item_type == "dashboard":
-			return True
-
-		return False
+		return True if item_type == "help" else item_type == "dashboard"
 
 	def build_workspace(self):
 		self.cards = {"items": self.get_links()}
@@ -233,10 +225,7 @@ class Workspace:
 					new_items.append(prepared_item)
 
 			if new_items:
-				if isinstance(card, _dict):
-					new_card = card.copy()
-				else:
-					new_card = card.as_dict().copy()
+				new_card = card.copy() if isinstance(card, _dict) else card.as_dict().copy()
 				new_card["links"] = new_items
 				new_card["label"] = _(new_card["label"])
 				new_data.append(new_card)
@@ -305,8 +294,7 @@ class Workspace:
 	def get_onboardings(self):
 		if self.onboarding_list:
 			for onboarding in self.onboarding_list:
-				onboarding_doc = self.get_onboarding_doc(onboarding)
-				if onboarding_doc:
+				if onboarding_doc := self.get_onboarding_doc(onboarding):
 					item = {
 						"label": _(onboarding),
 						"title": _(onboarding_doc.title),
@@ -437,11 +425,15 @@ def get_custom_doctype_list(module):
 		order_by="name",
 	)
 
-	out = []
-	for d in doctypes:
-		out.append({"type": "Link", "link_type": "doctype", "link_to": d.name, "label": _(d.name)})
-
-	return out
+	return [
+		{
+			"type": "Link",
+			"link_type": "doctype",
+			"link_to": d.name,
+			"label": _(d.name),
+		}
+		for d in doctypes
+	]
 
 
 def get_custom_report_list(module):
@@ -453,23 +445,20 @@ def get_custom_report_list(module):
 		order_by="name",
 	)
 
-	out = []
-	for r in reports:
-		out.append(
-			{
-				"type": "Link",
-				"link_type": "report",
-				"doctype": r.ref_doctype,
-				"dependencies": r.ref_doctype,
-				"is_query_report": 1
-				if r.report_type in ("Query Report", "Script Report", "Custom Report")
-				else 0,
-				"label": _(r.name),
-				"link_to": r.name,
-			}
-		)
-
-	return out
+	return [
+		{
+			"type": "Link",
+			"link_type": "report",
+			"doctype": r.ref_doctype,
+			"dependencies": r.ref_doctype,
+			"is_query_report": 1
+			if r.report_type in ("Query Report", "Script Report", "Custom Report")
+			else 0,
+			"label": _(r.name),
+			"link_to": r.name,
+		}
+		for r in reports
+	]
 
 
 def save_new_widget(doc, page, blocks, new_widgets):
@@ -509,21 +498,19 @@ def save_new_widget(doc, page, blocks, new_widgets):
 
 
 def clean_up(original_page, blocks):
-	page_widgets = {}
-
-	for wid in ["shortcut", "card", "chart", "quick_list"]:
-		# get list of widget's name from blocks
-		page_widgets[wid] = [x["data"][wid + "_name"] for x in loads(blocks) if x["type"] == wid]
-
+	page_widgets = {
+		wid: [x["data"][f"{wid}_name"] for x in loads(blocks) if x["type"] == wid]
+		for wid in ["shortcut", "card", "chart", "quick_list"]
+	}
 	# shortcut, chart & quick_list cleanup
 	for wid in ["shortcut", "chart", "quick_list"]:
 		updated_widgets = []
-		original_page.get(wid + "s").reverse()
+		original_page.get(f"{wid}s").reverse()
 
-		for w in original_page.get(wid + "s"):
+		for w in original_page.get(f"{wid}s"):
 			if w.label in page_widgets[wid] and w.label not in [x.label for x in updated_widgets]:
 				updated_widgets.append(w)
-		original_page.set(wid + "s", updated_widgets)
+		original_page.set(f"{wid}s", updated_widgets)
 
 	# card cleanup
 	for i, v in enumerate(original_page.links):

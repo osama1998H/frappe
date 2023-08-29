@@ -242,11 +242,12 @@ class TestAutoRepeat(FrappeTestCase):
 
 def make_auto_repeat(**args):
 	args = frappe._dict(args)
-	doc = frappe.get_doc(
+	return frappe.get_doc(
 		{
 			"doctype": "Auto Repeat",
 			"reference_doctype": args.reference_doctype or "ToDo",
-			"reference_document": args.reference_document or frappe.db.get_value("ToDo", "name"),
+			"reference_document": args.reference_document
+			or frappe.db.get_value("ToDo", "name"),
 			"submit_on_creation": args.submit_on_creation or 0,
 			"frequency": args.frequency or "Daily",
 			"start_date": args.start_date or add_days(today(), -1),
@@ -259,35 +260,32 @@ def make_auto_repeat(**args):
 		}
 	).insert(ignore_permissions=True)
 
-	return doc
-
 
 def create_submittable_doctype(doctype, submit_perms=1):
 	if frappe.db.exists("DocType", doctype):
 		return
-	else:
-		doc = frappe.get_doc(
-			{
-				"doctype": "DocType",
-				"__newname": doctype,
-				"module": "Custom",
-				"custom": 1,
-				"is_submittable": 1,
-				"fields": [{"fieldname": "test", "label": "Test", "fieldtype": "Data"}],
-				"permissions": [
-					{
-						"role": "System Manager",
-						"read": 1,
-						"write": 1,
-						"create": 1,
-						"delete": 1,
-						"submit": submit_perms,
-						"cancel": submit_perms,
-						"amend": submit_perms,
-					}
-				],
-			}
-		).insert()
+	doc = frappe.get_doc(
+		{
+			"doctype": "DocType",
+			"__newname": doctype,
+			"module": "Custom",
+			"custom": 1,
+			"is_submittable": 1,
+			"fields": [{"fieldname": "test", "label": "Test", "fieldtype": "Data"}],
+			"permissions": [
+				{
+					"role": "System Manager",
+					"read": 1,
+					"write": 1,
+					"create": 1,
+					"delete": 1,
+					"submit": submit_perms,
+					"cancel": submit_perms,
+					"amend": submit_perms,
+				}
+			],
+		}
+	).insert()
 
-		doc.allow_auto_repeat = 1
-		doc.save()
+	doc.allow_auto_repeat = 1
+	doc.save()

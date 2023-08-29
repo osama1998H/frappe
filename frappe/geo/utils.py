@@ -10,13 +10,12 @@ def get_coords(doctype, filters, type):
 	filters_sql = get_coords_conditions(doctype, filters)[4:]
 
 	coords = None
-	if type == "location_field":
-		coords = return_location(doctype, filters_sql)
-	elif type == "coordinates":
+	if type == "coordinates":
 		coords = return_coordinates(doctype, filters_sql)
 
-	out = convert_to_geojson(type, coords)
-	return out
+	elif type == "location_field":
+		coords = return_location(doctype, filters_sql)
+	return convert_to_geojson(type, coords)
 
 
 def convert_to_geojson(type, coords):

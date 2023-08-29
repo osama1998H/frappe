@@ -14,16 +14,17 @@ class TransactionLog(Document):
 		index = get_current_index()
 		self.row_index = index
 		self.timestamp = now_datetime()
-		if index != 1:
-			prev_hash = frappe.get_all(
-				"Transaction Log", filters={"row_index": str(index - 1)}, pluck="chaining_hash", limit=1
-			)
-			if prev_hash:
-				self.previous_hash = prev_hash[0]
-			else:
-				self.previous_hash = "Indexing broken"
-		else:
+		if index == 1:
 			self.previous_hash = self.hash_line()
+		elif prev_hash := frappe.get_all(
+			"Transaction Log",
+			filters={"row_index": str(index - 1)},
+			pluck="chaining_hash",
+			limit=1,
+		):
+			self.previous_hash = prev_hash[0]
+		else:
+			self.previous_hash = "Indexing broken"
 		self.transaction_hash = self.hash_line()
 		self.chaining_hash = self.hash_chain()
 		self.checksum_version = "v1.0.1"

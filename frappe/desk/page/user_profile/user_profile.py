@@ -47,7 +47,7 @@ def get_energy_points_percentage_chart_data(user, field):
 
 @frappe.whitelist()
 def get_user_rank(user):
-	month_start = datetime.today().replace(day=1)
+	month_start = datetime.now().replace(day=1)
 	monthly_rank = frappe.get_all(
 		"Energy Point Log",
 		group_by="`tabEnergy Point Log`.`user`",

@@ -137,22 +137,21 @@ def backup_to_s3():
 			private_files = os.path.join(
 				get_backups_path(), os.path.basename(backup.backup_path_private_files)
 			)
-	else:
-		if backup_files:
+	elif backup_files:
+		db_filename, site_config, files_filename, private_files = get_latest_backup_file(
+			with_files=backup_files
+		)
+
+		if not files_filename or not private_files:
+			generate_files_backup()
 			db_filename, site_config, files_filename, private_files = get_latest_backup_file(
 				with_files=backup_files
 			)
 
-			if not files_filename or not private_files:
-				generate_files_backup()
-				db_filename, site_config, files_filename, private_files = get_latest_backup_file(
-					with_files=backup_files
-				)
+	else:
+		db_filename, site_config = get_latest_backup_file()
 
-		else:
-			db_filename, site_config = get_latest_backup_file()
-
-	folder = os.path.basename(db_filename)[:15] + "/"
+	folder = f"{os.path.basename(db_filename)[:15]}/"
 	# for adding datetime to folder name
 
 	upload_file_to_s3(db_filename, folder, conn, bucket)
@@ -174,4 +173,4 @@ def upload_file_to_s3(filename, folder, conn, bucket):
 
 	except Exception as e:
 		frappe.log_error()
-		print("Error uploading: %s" % (e))
+		print(f"Error uploading: {e}")

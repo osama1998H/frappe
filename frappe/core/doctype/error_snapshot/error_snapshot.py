@@ -20,14 +20,12 @@ class ErrorSnapshot(Document):
 			frappe.local.flags.commit = True
 
 	def validate(self):
-		parent = frappe.get_all(
+		if parent := frappe.get_all(
 			"Error Snapshot",
 			filters={"evalue": self.evalue, "parent_error_snapshot": ""},
 			fields=["name", "relapses", "seen"],
 			limit_page_length=1,
-		)
-
-		if parent:
+		):
 			parent = parent[0]
 			self.update({"parent_error_snapshot": parent["name"]})
 			frappe.db.set_value("Error Snapshot", parent["name"], "relapses", parent["relapses"] + 1)

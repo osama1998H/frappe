@@ -35,7 +35,7 @@ def getdoc(doctype, name, user=None):
 
 	if not doc.has_permission("read"):
 		frappe.flags.error_message = _("Insufficient Permission for {0}").format(
-			frappe.bold(doctype + " " + name)
+			frappe.bold(f"{doctype} {name}")
 		)
 		raise frappe.PermissionError(("read", doctype, name))
 
@@ -78,9 +78,11 @@ def getdoctype(doctype, with_parent=False, cached_timestamp=None):
 
 def get_meta_bundle(doctype):
 	bundle = [frappe.desk.form.meta.get_meta(doctype)]
-	for df in bundle[0].fields:
-		if df.fieldtype in frappe.model.table_fields:
-			bundle.append(frappe.desk.form.meta.get_meta(df.options, not frappe.conf.developer_mode))
+	bundle.extend(
+		frappe.desk.form.meta.get_meta(df.options, not frappe.conf.developer_mode)
+		for df in bundle[0].fields
+		if df.fieldtype in frappe.model.table_fields
+	)
 	return bundle
 
 
@@ -319,7 +321,7 @@ def get_communication_data(
 		fields=fields, conditions=conditions
 	)
 
-	communications = frappe.db.sql(
+	return frappe.db.sql(
 		"""
 		SELECT *
 		FROM (({part1}) UNION ({part2})) AS combined
@@ -330,11 +332,14 @@ def get_communication_data(
 	""".format(
 			part1=part1, part2=part2, group_by=(group_by or "")
 		),
-		dict(doctype=doctype, name=name, start=frappe.utils.cint(start), limit=limit),
+		dict(
+			doctype=doctype,
+			name=name,
+			start=frappe.utils.cint(start),
+			limit=limit,
+		),
 		as_dict=as_dict,
 	)
-
-	return communications
 
 
 def get_assignments(dt, dn):
@@ -355,11 +360,10 @@ def get_badge_info(doctypes, filters):
 	filters = json.loads(filters)
 	doctypes = json.loads(doctypes)
 	filters["docstatus"] = ["!=", 2]
-	out = {}
-	for doctype in doctypes:
-		out[doctype] = frappe.db.get_value(doctype, filters, "count(*)")
-
-	return out
+	return {
+		doctype: frappe.db.get_value(doctype, filters, "count(*)")
+		for doctype in doctypes
+	}
 
 
 def run_onload(doc):
@@ -371,7 +375,7 @@ def get_view_logs(doctype, docname):
 	"""get and return the latest view logs if available"""
 	logs = []
 	if getattr(frappe.get_meta(doctype), "track_views", None):
-		view_logs = frappe.get_all(
+		if view_logs := frappe.get_all(
 			"View Log",
 			filters={
 				"reference_doctype": doctype,
@@ -379,9 +383,7 @@ def get_view_logs(doctype, docname):
 			},
 			fields=["name", "creation", "owner"],
 			order_by="creation desc",
-		)
-
-		if view_logs:
+		):
 			logs = view_logs
 	return logs
 
@@ -426,7 +428,7 @@ def get_additional_timeline_content(doctype, docname):
 
 def set_link_titles(doc):
 	link_titles = {}
-	link_titles.update(get_title_values_for_link_and_dynamic_link_fields(doc))
+	link_titles |= get_title_values_for_link_and_dynamic_link_fields(doc)
 	link_titles.update(get_title_values_for_table_and_multiselect_fields(doc))
 
 	send_link_titles(link_titles)
@@ -446,13 +448,13 @@ def get_title_values_for_link_and_dynamic_link_fields(doc, link_fields=None):
 		doctype = field.options if field.fieldtype == "Link" else doc.get(field.options)
 
 		meta = frappe.get_meta(doctype)
-		if not meta or not (meta.title_field and meta.show_title_field_in_link):
+		if not meta or not meta.title_field or not meta.show_title_field_in_link:
 			continue
 
 		link_title = frappe.db.get_value(
 			doctype, doc.get(field.fieldname), meta.title_field, cache=True, order_by=None
 		)
-		link_titles.update({doctype + "::" + doc.get(field.fieldname): link_title})
+		link_titles[f"{doctype}::{doc.get(field.fieldname)}"] = link_title
 
 	return link_titles
 
@@ -469,7 +471,7 @@ def get_title_values_for_table_and_multiselect_fields(doc, table_fields=None):
 			continue
 
 		for value in doc.get(field.fieldname):
-			link_titles.update(get_title_values_for_link_and_dynamic_link_fields(value))
+			link_titles |= get_title_values_for_link_and_dynamic_link_fields(value)
 
 	return link_titles
 

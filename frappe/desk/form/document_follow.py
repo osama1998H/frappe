@@ -59,13 +59,12 @@ def follow_document(doctype, doc_name, user):
 
 @frappe.whitelist()
 def unfollow_document(doctype, doc_name, user):
-	doc = frappe.get_all(
+	if doc := frappe.get_all(
 		"Document Follow",
 		filters={"ref_doctype": doctype, "ref_docname": doc_name, "user": user},
 		fields=["name"],
 		limit=1,
-	)
-	if doc:
+	):
 		frappe.delete_doc("Document Follow", doc[0].name)
 		return 1
 	return 0
@@ -134,8 +133,9 @@ def get_message_for_user(frequency, user):
 	valid_document_follows = []
 
 	for document_follow in latest_document_follows:
-		content = get_message(document_follow.ref_docname, document_follow.ref_doctype, frequency, user)
-		if content:
+		if content := get_message(
+			document_follow.ref_docname, document_follow.ref_doctype, frequency, user
+		):
 			message = message + content
 			valid_document_follows.append(
 				{
@@ -161,7 +161,7 @@ def get_document_followed_by_user(user):
 
 def get_version(doctype, doc_name, frequency, user):
 	timeline = []
-	version = frappe.get_all(
+	if version := frappe.get_all(
 		"Version",
 		filters=[
 			["ref_doctype", "=", doctype],
@@ -169,8 +169,7 @@ def get_version(doctype, doc_name, frequency, user):
 			*_get_filters(frequency, user),
 		],
 		fields=["data", "modified", "modified_by"],
-	)
-	if version:
+	):
 		for v in version:
 			change = frappe.parse_json(v.data)
 			time = frappe.utils.format_datetime(v.modified, "hh:mm a")
@@ -263,19 +262,17 @@ def get_row_changed(row_changed, time, doctype, doc_name, v):
 
 
 def get_added_row(added, time, doctype, doc_name, v):
-	items = []
-	for d in added:
-		items.append(
-			{
-				"time": v.modified,
-				"data": {"to": d[0], "time": time},
-				"doctype": doctype,
-				"doc_name": doc_name,
-				"type": "row added",
-				"by": v.modified_by,
-			}
-		)
-	return items
+	return [
+		{
+			"time": v.modified,
+			"data": {"to": d[0], "time": time},
+			"doctype": doctype,
+			"doc_name": doc_name,
+			"type": "row added",
+			"by": v.modified_by,
+		}
+		for d in added
+	]
 
 
 def get_field_changed(changed, time, doctype, doc_name, v):

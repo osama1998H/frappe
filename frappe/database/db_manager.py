@@ -56,9 +56,7 @@ class DbManager:
 		from frappe.utils import make_esc
 
 		esc = make_esc("$ ")
-		pv = which("pv")
-
-		if pv:
+		if pv := which("pv"):
 			pipe = f"{pv} {source} |"
 			source = ""
 		else:

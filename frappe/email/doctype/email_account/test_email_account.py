@@ -284,9 +284,10 @@ class TestEmailAccount(FrappeTestCase):
 		# get test mail with message-id as in-reply-to
 		with open(os.path.join(os.path.dirname(__file__), "test_mails", "reply-4.raw")) as f:
 			messages = {
-				# append_to = ToDo
 				'"INBOX"': {
-					"latest_messages": [f.read().replace("{{ message_id }}", "<" + last_mail.message_id + ">")],
+					"latest_messages": [
+						f.read().replace("{{ message_id }}", f"<{last_mail.message_id}>")
+					],
 					"seen_status": {2: "UNSEEN"},
 					"uid_list": [2],
 				}
@@ -467,17 +468,17 @@ class TestInboundMail(FrappeTestCase):
 
 	def new_communication(self, **kwargs):
 		defaults = {"subject": "Test Subject"}
-		d = {**defaults, **kwargs}
+		d = defaults | kwargs
 		return self.new_doc("Communication", **d)
 
 	def new_email_queue(self, **kwargs):
 		defaults = {"message_id": get_message_id().strip(" <>")}
-		d = {**defaults, **kwargs}
+		d = defaults | kwargs
 		return self.new_doc("Email Queue", **d)
 
 	def new_todo(self, **kwargs):
 		defaults = {"description": "Description"}
-		d = {**defaults, **kwargs}
+		d = defaults | kwargs
 		return self.new_doc("ToDo", **d)
 
 	def test_self_sent_mail(self):
@@ -619,7 +620,7 @@ class TestInboundMail(FrappeTestCase):
 def cleanup(sender=None):
 	filters = {}
 	if sender:
-		filters.update({"sender": sender})
+		filters["sender"] = sender
 
 	names = frappe.get_list("Communication", filters=filters, fields=["name"])
 	for name in names:

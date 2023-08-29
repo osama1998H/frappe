@@ -60,9 +60,7 @@ class Oauth:
 	def _connect_pop(self) -> None:
 		# NOTE: poplib doesn't have AUTH command implementation
 		res = self._conn._shortcmd(
-			"AUTH {} {}".format(
-				self._mechanism, base64.b64encode(bytes(self._auth_string, "utf-8")).decode("utf-8")
-			)
+			f'AUTH {self._mechanism} {base64.b64encode(bytes(self._auth_string, "utf-8")).decode("utf-8")}'
 		)
 
 		if not res.startswith(b"+OK"):

@@ -17,8 +17,7 @@ class RolePermissionforPageandReport(Document):
 		args = self.get_args()
 		self.set("roles", [])
 
-		name = frappe.db.get_value("Custom Role", args, "name")
-		if name:
+		if name := frappe.db.get_value("Custom Role", args, "name"):
 			doc = frappe.get_doc("Custom Role", name)
 			roles = doc.roles
 		else:
@@ -80,11 +79,11 @@ class RolePermissionforPageandReport(Document):
 		return {check_for_field: name}
 
 	def get_roles(self):
-		roles = []
-		for data in self.roles:
-			if data.role != "All":
-				roles.append({"role": data.role, "parenttype": "Custom Role"})
-		return roles
+		return [
+			{"role": data.role, "parenttype": "Custom Role"}
+			for data in self.roles
+			if data.role != "All"
+		]
 
 	def update_status(self):
 		return frappe.render_template

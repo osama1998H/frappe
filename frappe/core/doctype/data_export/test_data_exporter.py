@@ -18,13 +18,13 @@ class TestDataExporter(FrappeTestCase):
 		"""
 		if force:
 			frappe.delete_doc_if_exists("DocType", doctype_name)
-			frappe.delete_doc_if_exists("DocType", "Child 1 of " + doctype_name)
+			frappe.delete_doc_if_exists("DocType", f"Child 1 of {doctype_name}")
 
 		if frappe.db.exists("DocType", doctype_name):
 			return
 
 		# Child Table 1
-		table_1_name = "Child 1 of " + doctype_name
+		table_1_name = f"Child 1 of {doctype_name}"
 		frappe.get_doc(
 			{
 				"doctype": "DocType",
@@ -104,9 +104,7 @@ class TestDataExporter(FrappeTestCase):
 					self.assertEqual(frappe.response["type"], "csv")
 				elif type == "Excel":
 					self.assertEqual(frappe.response["type"], "binary")
-					self.assertEqual(
-						frappe.response["filename"], self.doctype_name + ".xlsx"
-					)  # 'Test DocType for Export Tool.xlsx')
+					self.assertEqual(frappe.response["filename"], f"{self.doctype_name}.xlsx")
 					self.assertTrue(frappe.response["filecontent"])
 
 	def tearDown(self):

@@ -14,9 +14,7 @@ from frappe.utils import cint, cstr
 class TokenCache(Document):
 	def get_auth_header(self):
 		if self.access_token:
-			headers = {"Authorization": "Bearer " + self.get_password("access_token")}
-			return headers
-
+			return {"Authorization": "Bearer " + self.get_password("access_token")}
 		raise frappe.exceptions.DoesNotExistError
 
 	def update_data(self, data):
@@ -37,8 +35,7 @@ class TokenCache(Document):
 		self.refresh_token = cstr(data.get("refresh_token", ""))
 		self.expires_in = cint(data.get("expires_in", 0))
 
-		new_scopes = data.get("scope")
-		if new_scopes:
+		if new_scopes := data.get("scope"):
 			if isinstance(new_scopes, str):
 				new_scopes = new_scopes.split(" ")
 			if isinstance(new_scopes, list):

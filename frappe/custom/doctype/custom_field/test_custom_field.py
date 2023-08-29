@@ -56,7 +56,7 @@ class TestCustomField(FrappeTestCase):
 				if field.fieldname == "b_test_field":
 					self.assertEqual(fields[i - 1].fieldname, "status")
 
-				if field.fieldname == "d_test_field":
+				elif field.fieldname == "d_test_field":
 					self.assertEqual(fields[i - 1].fieldname, "a_test_field")
 
 			self.assertEqual(fields[-1].fieldname, "c_test_field")

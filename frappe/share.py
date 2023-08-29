@@ -38,9 +38,7 @@ def add_docshare(
 	if not (flags or {}).get("ignore_share_permission"):
 		check_share_permission(doctype, name)
 
-	share_name = get_share_name(doctype, name, user, everyone)
-
-	if share_name:
+	if share_name := get_share_name(doctype, name, user, everyone):
 		doc = frappe.get_doc("DocShare", share_name)
 	else:
 		doc = frappe.new_doc("DocShare")
@@ -71,11 +69,9 @@ def add_docshare(
 
 
 def remove(doctype, name, user, flags=None):
-	share_name = frappe.db.get_value(
+	if share_name := frappe.db.get_value(
 		"DocShare", {"user": user, "share_name": name, "share_doctype": doctype}
-	)
-
-	if share_name:
+	):
 		frappe.delete_doc("DocShare", share_name, flags=flags)
 
 
@@ -182,16 +178,17 @@ def get_shared_doctypes(user=None):
 
 
 def get_share_name(doctype, name, user, everyone):
-	if cint(everyone):
-		share_name = frappe.db.get_value(
-			"DocShare", {"everyone": 1, "share_name": name, "share_doctype": doctype}
+	return (
+		frappe.db.get_value(
+			"DocShare",
+			{"everyone": 1, "share_name": name, "share_doctype": doctype},
 		)
-	else:
-		share_name = frappe.db.get_value(
-			"DocShare", {"user": user, "share_name": name, "share_doctype": doctype}
+		if cint(everyone)
+		else frappe.db.get_value(
+			"DocShare",
+			{"user": user, "share_name": name, "share_doctype": doctype},
 		)
-
-	return share_name
+	)
 
 
 def check_share_permission(doctype, name):

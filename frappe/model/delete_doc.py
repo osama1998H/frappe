@@ -44,7 +44,7 @@ def delete_doc(
 	is_virtual = is_virtual_doctype(doctype)
 
 	names = name
-	if isinstance(name, str) or isinstance(name, int):
+	if isinstance(name, (str, int)):
 		names = [name]
 
 	for name in names or []:
@@ -278,9 +278,8 @@ def check_if_doc_is_linked(doc, method="Delete"):
 					reference_docname = item_parent or item.name
 					raise_link_exists_exception(doc, linked_doctype, reference_docname)
 
-		else:
-			if frappe.db.get_value(link_dt, None, link_field) == doc.name:
-				raise_link_exists_exception(doc, link_dt, link_dt)
+		elif frappe.db.get_value(link_dt, None, link_field) == doc.name:
+			raise_link_exists_exception(doc, link_dt, link_dt)
 
 
 def check_if_doc_is_dynamically_linked(doc, method="Delete"):

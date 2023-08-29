@@ -110,7 +110,7 @@ class TestAccessLog(FrappeTestCase):
 		self.test_report_name = "General Ledger"
 		self.test_file_type = "CSV"
 		self.test_method = "Test Method"
-		self.file_name = frappe.utils.random_string(10) + ".txt"
+		self.file_name = f"{frappe.utils.random_string(10)}.txt"
 		self.test_content = frappe.utils.random_string(1024)
 
 	def test_make_full_access_log(self):

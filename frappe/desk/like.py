@@ -36,30 +36,24 @@ def _toggle_like(doctype, name, add, user=None):
 	try:
 		liked_by = frappe.db.get_value(doctype, name, "_liked_by")
 
-		if liked_by:
-			liked_by = json.loads(liked_by)
-		else:
-			liked_by = []
-
+		liked_by = json.loads(liked_by) if liked_by else []
 		if add == "Yes":
 			if user not in liked_by:
 				liked_by.append(user)
 				add_comment(doctype, name)
 				if frappe.get_cached_value("User", user, "follow_liked_documents"):
 					follow_document(doctype, name, user)
-		else:
-			if user in liked_by:
-				liked_by.remove(user)
-				remove_like(doctype, name)
+		elif user in liked_by:
+			liked_by.remove(user)
+			remove_like(doctype, name)
 
 		frappe.db.set_value(doctype, name, "_liked_by", json.dumps(liked_by), update_modified=False)
 
 	except frappe.db.ProgrammingError as e:
-		if frappe.db.is_column_missing(e):
-			add_column(doctype, "_liked_by", "Text")
-			_toggle_like(doctype, name, add, user)
-		else:
+		if not frappe.db.is_column_missing(e):
 			raise
+		add_column(doctype, "_liked_by", "Text")
+		_toggle_like(doctype, name, add, user)
 
 
 def remove_like(doctype, name):
@@ -95,7 +89,9 @@ def add_comment(doctype, name):
 
 		doc.add_comment(
 			"Like",
-			_("{0}: {1} in {2}").format(_(doc.communication_type), "<b>" + doc.subject + "</b>", link),
+			_("{0}: {1} in {2}").format(
+				_(doc.communication_type), f"<b>{doc.subject}</b>", link
+			),
 			link_doctype=doc.reference_doctype,
 			link_name=doc.reference_name,
 		)

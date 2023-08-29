@@ -46,16 +46,15 @@ class Notification(Document):
 
 	def on_update(self):
 		frappe.cache().hdel("notifications", self.document_type)
-		path = export_module_json(self, self.is_standard, self.module)
-		if path:
+		if path := export_module_json(self, self.is_standard, self.module):
 			# js
-			if not os.path.exists(path + ".md") and not os.path.exists(path + ".html"):
-				with open(path + ".md", "w") as f:
+			if not os.path.exists(f"{path}.md") and not os.path.exists(f"{path}.html"):
+				with open(f"{path}.md", "w") as f:
 					f.write(self.message)
 
 			# py
-			if not os.path.exists(path + ".py"):
-				with open(path + ".py", "w") as f:
+			if not os.path.exists(f"{path}.py"):
+				with open(f"{path}.py", "w") as f:
 					f.write(
 						"""import frappe
 
@@ -95,8 +94,8 @@ def get_context(context):
 			diff_days = -diff_days
 
 		reference_date = add_to_date(nowdate(), days=diff_days)
-		reference_date_start = reference_date + " 00:00:00.000000"
-		reference_date_end = reference_date + " 23:59:59.000000"
+		reference_date_start = f"{reference_date} 00:00:00.000000"
+		reference_date_end = f"{reference_date} 23:59:59.000000"
 
 		doc_list = frappe.get_all(
 			self.document_type,
@@ -144,12 +143,10 @@ def get_context(context):
 			self.log_error("Failed to send Notification")
 
 		if self.set_property_after_alert:
-			allow_update = True
-			if (
-				doc.docstatus.is_submitted()
-				and not doc.meta.get_field(self.set_property_after_alert).allow_on_submit
-			):
-				allow_update = False
+			allow_update = bool(
+				not doc.docstatus.is_submitted()
+				or doc.meta.get_field(self.set_property_after_alert).allow_on_submit
+			)
 			try:
 				if allow_update and not doc.flags.in_notification_update:
 					fieldname = self.set_property_after_alert
@@ -335,19 +332,9 @@ def get_context(context):
 			return None
 
 		print_settings = frappe.get_doc("Print Settings", "Print Settings")
-		if (doc.docstatus == 0 and not print_settings.allow_print_for_draft) or (
-			doc.docstatus == 2 and not print_settings.allow_print_for_cancelled
+		if (doc.docstatus != 0 or print_settings.allow_print_for_draft) and (
+			doc.docstatus != 2 or print_settings.allow_print_for_cancelled
 		):
-
-			# ignoring attachment as draft and cancelled documents are not allowed to print
-			status = "Draft" if doc.docstatus == 0 else "Cancelled"
-			frappe.throw(
-				_(
-					"""Not allowed to attach {0} document, please enable Allow Print For {0} in Print Settings"""
-				).format(status),
-				title=_("Error in Notification"),
-			)
-		else:
 			return [
 				{
 					"print_format_attachment": 1,
@@ -360,6 +347,14 @@ def get_context(context):
 					else "en",
 				}
 			]
+		# ignoring attachment as draft and cancelled documents are not allowed to print
+		status = "Draft" if doc.docstatus == 0 else "Cancelled"
+		frappe.throw(
+			_(
+				"""Not allowed to attach {0} document, please enable Allow Print For {0} in Print Settings"""
+			).format(status),
+			title=_("Error in Notification"),
+		)
 
 	def get_template(self):
 		module = get_doc_module(self.module, self.doctype, self.name)
@@ -376,11 +371,9 @@ def get_context(context):
 
 	def load_standard_properties(self, context):
 		"""load templates and run get_context"""
-		module = get_doc_module(self.module, self.doctype, self.name)
-		if module:
+		if module := get_doc_module(self.module, self.doctype, self.name):
 			if hasattr(module, "get_context"):
-				out = module.get_context(context)
-				if out:
+				if out := module.get_context(context):
 					context.update(out)
 
 		self.message = self.get_template()
@@ -481,6 +474,4 @@ def get_assignees(doc):
 		fields=["allocated_to"],
 	)
 
-	recipients = [d.allocated_to for d in assignees]
-
-	return recipients
+	return [d.allocated_to for d in assignees]

@@ -65,6 +65,4 @@ def get_data():
 
 
 def delist(val):
-	if isinstance(val, list) and len(val) == 1:
-		return val[0]
-	return val
+	return val[0] if isinstance(val, list) and len(val) == 1 else val
