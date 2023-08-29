@@ -122,7 +122,7 @@ class AutoRepeat(Document):
 
 	def validate_auto_repeat_days(self):
 		auto_repeat_days = self.get_auto_repeat_days()
-		if not len(set(auto_repeat_days)) == len(auto_repeat_days):
+		if len(set(auto_repeat_days)) != len(auto_repeat_days):
 			repeated_days = get_repeated(auto_repeat_days)
 			plural = "s" if len(repeated_days) > 1 else ""
 
@@ -306,13 +306,11 @@ class AutoRepeat(Document):
 		return next_date
 
 	def get_days(self, schedule_date):
-		if self.frequency == "Weekly":
-			days = self.get_offset_for_weekly_frequency(schedule_date)
-		else:
-			# daily frequency
-			days = 1
-
-		return days
+		return (
+			self.get_offset_for_weekly_frequency(schedule_date)
+			if self.frequency == "Weekly"
+			else 1
+		)
 
 	def get_offset_for_weekly_frequency(self, schedule_date):
 		# if weekdays are not set, offset is 7 from current schedule date
@@ -395,11 +393,10 @@ class AutoRepeat(Document):
 			res += get_contacts_linked_from(
 				self.reference_doctype, self.reference_document, fields=["email_id"]
 			)
-			email_ids = {d.email_id for d in res}
-			if not email_ids:
-				frappe.msgprint(_("No contacts linked to document"), alert=True)
-			else:
+			if email_ids := {d.email_id for d in res}:
 				self.recipients = ", ".join(email_ids)
+			else:
+				frappe.msgprint(_("No contacts linked to document"), alert=True)
 
 	def disable_auto_repeat(self):
 		frappe.db.set_value("Auto Repeat", self.name, "disabled", 1)

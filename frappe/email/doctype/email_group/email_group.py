@@ -83,9 +83,7 @@ def add_subscribers(name, email_list):
 	count = 0
 	for email in email_list:
 		email = email.strip()
-		parsed_email = validate_email_address(email, False)
-
-		if parsed_email:
+		if parsed_email := validate_email_address(email, False):
 			if not frappe.db.get_value("Email Group Member", {"email_group": name, "email": parsed_email}):
 				frappe.get_doc(
 					{"doctype": "Email Group Member", "email_group": name, "email": parsed_email}
@@ -94,8 +92,6 @@ def add_subscribers(name, email_list):
 				send_welcome_email(welcome_email, parsed_email, name)
 
 				count += 1
-			else:
-				pass
 		else:
 			frappe.msgprint(_("{0} is not a valid Email Address").format(email))
 

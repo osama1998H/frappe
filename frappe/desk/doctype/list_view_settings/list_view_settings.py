@@ -49,11 +49,14 @@ def set_in_list_view_property(doctype, field, value):
 	if not field or field.fieldname == "status_field":
 		return
 
-	property_setter = frappe.db.get_value(
+	if property_setter := frappe.db.get_value(
 		"Property Setter",
-		{"doc_type": doctype, "field_name": field.fieldname, "property": "in_list_view"},
-	)
-	if property_setter:
+		{
+			"doc_type": doctype,
+			"field_name": field.fieldname,
+			"property": "in_list_view",
+		},
+	):
 		doc = frappe.get_doc("Property Setter", property_setter)
 		doc.value = value
 		doc.save()
@@ -75,14 +78,17 @@ def set_in_list_view_property(doctype, field, value):
 def get_default_listview_fields(doctype):
 	meta = frappe.get_meta(doctype)
 	path = frappe.get_module_path(
-		frappe.scrub(meta.module), "doctype", frappe.scrub(meta.name), frappe.scrub(meta.name) + ".json"
+		frappe.scrub(meta.module),
+		"doctype",
+		frappe.scrub(meta.name),
+		f"{frappe.scrub(meta.name)}.json",
 	)
 	doctype_json = frappe.get_file_json(path)
 
 	fields = [f.get("fieldname") for f in doctype_json.get("fields") if f.get("in_list_view")]
 
 	if meta.title_field:
-		if not meta.title_field.strip() in fields:
+		if meta.title_field.strip() not in fields:
 			fields.append(meta.title_field.strip())
 
 	return fields

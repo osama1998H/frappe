@@ -121,7 +121,10 @@ class FrappeClient:
 			params["limit_start"] = limit_start
 			params["limit_page_length"] = limit_page_length
 		res = self.session.get(
-			self.url + "/api/resource/" + doctype, params=params, verify=self.verify, headers=self.headers
+			f"{self.url}/api/resource/{doctype}",
+			params=params,
+			verify=self.verify,
+			headers=self.headers,
 		)
 		return self.post_process(res)
 
@@ -130,7 +133,7 @@ class FrappeClient:
 
 		:param doc: A dict or Document object to be inserted remotely"""
 		res = self.session.post(
-			self.url + "/api/resource/" + doc.get("doctype"),
+			f"{self.url}/api/resource/" + doc.get("doctype"),
 			data={"data": frappe.as_json(doc)},
 			verify=self.verify,
 			headers=self.headers,
@@ -147,7 +150,12 @@ class FrappeClient:
 		"""Update a remote document
 
 		:param doc: dict or Document object to be updated remotely. `name` is mandatory for this"""
-		url = self.url + "/api/resource/" + doc.get("doctype") + "/" + cstr(doc.get("name"))
+		url = (
+			f"{self.url}/api/resource/"
+			+ doc.get("doctype")
+			+ "/"
+			+ cstr(doc.get("name"))
+		)
 		res = self.session.put(
 			url, data={"data": frappe.as_json(doc)}, verify=self.verify, headers=self.headers
 		)
@@ -225,7 +233,7 @@ class FrappeClient:
 			params["fields"] = json.dumps(fields)
 
 		res = self.session.get(
-			self.url + "/api/resource/" + doctype + "/" + cstr(name),
+			f"{self.url}/api/resource/{doctype}/{cstr(name)}",
 			params=params,
 			verify=self.verify,
 			headers=self.headers,
@@ -255,12 +263,12 @@ class FrappeClient:
 		tables = {}
 		for df in meta.get_table_fields():
 			if verbose:
-				print("getting " + df.options)
+				print(f"getting {df.options}")
 			tables[df.fieldname] = self.get_list(df.options, limit_page_length=999999)
 
 		# get links
 		if verbose:
-			print("getting " + doctype)
+			print(f"getting {doctype}")
 		docs = self.get_list(doctype, limit_page_length=999999, filters=filters)
 
 		# build - attach children to parents
@@ -275,7 +283,7 @@ class FrappeClient:
 						docs_map[child.parent].setdefault(fieldname, []).append(child)
 
 		if verbose:
-			print("inserting " + doctype)
+			print(f"inserting {doctype}")
 		for doc in docs:
 			if exclude and doc["name"] in exclude:
 				continue
@@ -392,7 +400,7 @@ class FrappeOAuth2Client(FrappeClient):
 	def __init__(self, url, access_token, verify=True):
 		self.access_token = access_token
 		self.headers = {
-			"Authorization": "Bearer " + access_token,
+			"Authorization": f"Bearer {access_token}",
 			"content-type": "application/x-www-form-urlencoded",
 		}
 		self.verify = verify
@@ -419,13 +427,10 @@ class OAuth2Session:
 		self.headers = headers
 
 	def get(self, url, params, verify):
-		res = requests.get(url, params=params, headers=self.headers, verify=verify)
-		return res
+		return requests.get(url, params=params, headers=self.headers, verify=verify)
 
 	def post(self, url, data, verify):
-		res = requests.post(url, data=data, headers=self.headers, verify=verify)
-		return res
+		return requests.post(url, data=data, headers=self.headers, verify=verify)
 
 	def put(self, url, data, verify):
-		res = requests.put(url, data=data, headers=self.headers, verify=verify)
-		return res
+		return requests.put(url, data=data, headers=self.headers, verify=verify)

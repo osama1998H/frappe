@@ -128,7 +128,7 @@ def as_unicode(text: str, encoding: str = "utf-8") -> str:
 	elif isinstance(text, bytes):
 		return str(text, encoding)
 	else:
-		return str(text)
+		return text
 
 
 def get_lang_dict(fortype: str, name: str | None = None) -> dict[str, str]:
@@ -302,7 +302,7 @@ def get_site_config(sites_path: str | None = None, site_path: str | None = None)
 		common_site_config = os.path.join(sites_path, "common_site_config.json")
 		if os.path.exists(common_site_config):
 			try:
-				config.update(get_file_json(common_site_config))
+				config |= get_file_json(common_site_config)
 			except Exception as error:
 				click.secho("common_site_config.json is invalid", fg="red")
 				print(error)
@@ -376,7 +376,7 @@ def errprint(msg: str) -> None:
 
 	:param msg: Message."""
 	msg = as_unicode(msg)
-	if not request or (not "cmd" in local.form_dict) or conf.developer_mode:
+	if not request or "cmd" not in local.form_dict or conf.developer_mode:
 		print(msg)
 
 	error_log.append({"exc": msg})
@@ -496,11 +496,7 @@ def clear_messages():
 
 
 def get_message_log():
-	log = []
-	for msg_out in local.message_log:
-		log.append(json.loads(msg_out))
-
-	return log
+	return [json.loads(msg_out) for msg_out in local.message_log]
 
 
 def clear_last_message():
@@ -917,10 +913,7 @@ def only_has_select_perm(doctype, user=None, ignore_permissions=False):
 
 	permissions = frappe.permissions.get_role_permissions(doctype, user=user)
 
-	if permissions.get("select") and not permissions.get("read"):
-		return True
-	else:
-		return False
+	return bool(permissions.get("select") and not permissions.get("read"))
 
 
 def has_permission(
@@ -998,8 +991,7 @@ def has_website_permission(doc=None, ptype="read", user=None, verbose=False, doc
 		if hasattr(doc, "has_website_permission"):
 			return doc.has_website_permission(ptype, user, verbose=verbose)
 
-	hooks = (get_hooks("has_website_permission") or {}).get(doctype, [])
-	if hooks:
+	if hooks := (get_hooks("has_website_permission") or {}).get(doctype, []):
 		for method in hooks:
 			result = call(method, doc=doc, ptype=ptype, user=user, verbose=verbose)
 			# if even a single permission check is Falsy
@@ -1140,9 +1132,7 @@ def get_cached_value(
 		return doc.get(fieldname)
 
 	values = [doc.get(f) for f in fieldname]
-	if as_dict:
-		return _dict(zip(fieldname, values))
-	return values
+	return _dict(zip(fieldname, values)) if as_dict else values
 
 
 def get_doc(*args, **kwargs) -> "Document":
@@ -1174,8 +1164,13 @@ def get_doc(*args, **kwargs) -> "Document":
 
 def get_last_doc(doctype, filters=None, order_by="creation desc", *, for_update=False):
 	"""Get last created document of this type."""
-	d = get_all(doctype, filters=filters, limit_page_length=1, order_by=order_by, pluck="name")
-	if d:
+	if d := get_all(
+		doctype,
+		filters=filters,
+		limit_page_length=1,
+		order_by=order_by,
+		pluck="name",
+	):
 		return get_doc(doctype, d[0], for_update=for_update)
 	else:
 		raise DoesNotExistError
@@ -1327,7 +1322,7 @@ def get_module_path(module, *joins):
 	from frappe.modules.utils import get_module_app
 
 	app = get_module_app(module)
-	return get_pymodule_path(app + "." + scrub(module), *joins)
+	return get_pymodule_path(f"{app}.{scrub(module)}", *joins)
 
 
 def get_app_path(app_name, *joins):
@@ -1350,7 +1345,7 @@ def get_pymodule_path(modulename, *joins):
 
 	:param modulename: Python module name.
 	:param *joins: Join additional path elements using `os.path.join`."""
-	if not "public" in joins:
+	if "public" not in joins:
 		joins = [scrub(part) for part in joins]
 	return os.path.join(os.path.dirname(get_module(scrub(modulename)).__file__ or ""), *joins)
 
@@ -1473,11 +1468,10 @@ def get_hooks(
 
 	if app_name:
 		hooks = _dict(_load_app_hooks(app_name))
+	elif conf.developer_mode:
+		hooks = _dict(_load_app_hooks())
 	else:
-		if conf.developer_mode:
-			hooks = _dict(_load_app_hooks())
-		else:
-			hooks = _dict(cache().get_value("app_hooks", _load_app_hooks))
+		hooks = _dict(cache().get_value("app_hooks", _load_app_hooks))
 
 	if hook:
 		return hooks.get(hook, ([] if default == "_KEEP_DEFAULT_LIST" else default))
@@ -1531,8 +1525,7 @@ def get_file_items(path, raise_not_found=False, ignore_empty_lines=True):
 	"""Returns items from text file as a list. Ignores empty lines."""
 	import frappe.utils
 
-	content = read_file(path, raise_not_found=raise_not_found)
-	if content:
+	if content := read_file(path, raise_not_found=raise_not_found):
 		content = frappe.utils.strip(content)
 
 		return [
@@ -1615,11 +1608,7 @@ def get_newargs(fn: Callable, kwargs: dict[str, Any]) -> dict[str, Any]:
 				fnargs.remove(param_name)
 				break
 
-	newargs = {}
-	for a in kwargs:
-		if (a in fnargs) or varkw_exist:
-			newargs[a] = kwargs.get(a)
-
+	newargs = {a: kwargs.get(a) for a in kwargs if (a in fnargs) or varkw_exist}
 	newargs.pop("ignore_permissions", None)
 	newargs.pop("flags", None)
 
@@ -1702,11 +1691,7 @@ def copy_doc(doc: "Document", ignore_no_copy: bool = True) -> "Document":
 	if not local.flags.in_test:
 		fields_to_clear.append("docstatus")
 
-	if not isinstance(doc, dict):
-		d = doc.as_dict()
-	else:
-		d = doc
-
+	d = doc.as_dict() if not isinstance(doc, dict) else doc
 	newdoc = get_doc(copy.deepcopy(d))
 	newdoc.set("__islocal", 1)
 	for fieldname in fields_to_clear + ["amended_from", "amendment_date"]:
@@ -1816,12 +1801,10 @@ def redirect_to_message(title, html, http_status_code=None, context=None, indica
 	cache().set_value(f"message_id:{message_id}", message, expires_in_sec=60)
 	location = f"/message?id={message_id}"
 
-	if not getattr(local, "is_ajax", False):
-		local.response["type"] = "redirect"
-		local.response["location"] = location
-
-	else:
+	if getattr(local, "is_ajax", False):
 		return location
+	local.response["type"] = "redirect"
+	local.response["location"] = location
 
 
 def build_match_conditions(doctype, as_condition=True):
@@ -1874,7 +1857,7 @@ def get_all(doctype, *args, **kwargs):
 	        frappe.get_all("ToDo", fields=["*"], filters = [["modified", ">", "2014-01-01"]])
 	"""
 	kwargs["ignore_permissions"] = True
-	if not "limit_page_length" in kwargs:
+	if "limit_page_length" not in kwargs:
 		kwargs["limit_page_length"] = 0
 	return get_list(doctype, *args, **kwargs)
 
@@ -2378,10 +2361,9 @@ def mock(type, size=1, locale="en"):
 	fake = faker.Faker(locale)
 	if type not in dir(fake):
 		raise ValueError("Not a valid mock type.")
-	else:
-		for i in range(size):
-			data = getattr(fake, type)()
-			results.append(data)
+	for _ in range(size):
+		data = getattr(fake, type)()
+		results.append(data)
 
 	from frappe.utils import squashify
 

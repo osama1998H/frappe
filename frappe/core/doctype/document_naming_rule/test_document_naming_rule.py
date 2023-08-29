@@ -11,7 +11,10 @@ class TestDocumentNamingRule(FrappeTestCase):
 		).insert()
 
 		todo = frappe.get_doc(
-			dict(doctype="ToDo", description="Is this my name " + frappe.generate_hash())
+			dict(
+				doctype="ToDo",
+				description=f"Is this my name {frappe.generate_hash()}",
+			)
 		).insert()
 
 		self.assertEqual(todo.name, "test-todo-00001")
@@ -46,15 +49,27 @@ class TestDocumentNamingRule(FrappeTestCase):
 		naming_rule_2.insert()
 
 		todo = frappe.get_doc(
-			dict(doctype="ToDo", priority="High", description="Is this my name " + frappe.generate_hash())
+			dict(
+				doctype="ToDo",
+				priority="High",
+				description=f"Is this my name {frappe.generate_hash()}",
+			)
 		).insert()
 
 		todo_1 = frappe.get_doc(
-			dict(doctype="ToDo", priority="Medium", description="Is this my name " + frappe.generate_hash())
+			dict(
+				doctype="ToDo",
+				priority="Medium",
+				description=f"Is this my name {frappe.generate_hash()}",
+			)
 		).insert()
 
 		todo_2 = frappe.get_doc(
-			dict(doctype="ToDo", priority="Low", description="Is this my name " + frappe.generate_hash())
+			dict(
+				doctype="ToDo",
+				priority="Low",
+				description=f"Is this my name {frappe.generate_hash()}",
+			)
 		).insert()
 
 		try:

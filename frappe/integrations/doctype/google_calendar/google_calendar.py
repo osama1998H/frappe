@@ -140,9 +140,9 @@ def authorize_access(g_calendar, reauthorize=None):
 				frappe.db.commit()
 
 			frappe.local.response["type"] = "redirect"
-			frappe.local.response["location"] = "/app/Form/{}/{}".format(
-				quote("Google Calendar"), quote(google_calendar.name)
-			)
+			frappe.local.response[
+				"location"
+			] = f'/app/Form/{quote("Google Calendar")}/{quote(google_calendar.name)}'
 
 			frappe.msgprint(_("Google Calendar has been configured."))
 		except Exception as e:
@@ -151,9 +151,7 @@ def authorize_access(g_calendar, reauthorize=None):
 
 def get_authentication_url(client_id=None, redirect_uri=None):
 	return {
-		"url": "https://accounts.google.com/o/oauth2/v2/auth?access_type=offline&response_type=code&prompt=consent&client_id={}&include_granted_scopes=true&scope={}&redirect_uri={}".format(
-			client_id, SCOPES, redirect_uri
-		)
+		"url": f"https://accounts.google.com/o/oauth2/v2/auth?access_type=offline&response_type=code&prompt=consent&client_id={client_id}&include_granted_scopes=true&scope={SCOPES}&redirect_uri={redirect_uri}"
 	}
 
 
@@ -174,7 +172,7 @@ def sync(g_calendar=None):
 	filters = {"enable": 1}
 
 	if g_calendar:
-		filters.update({"name": g_calendar})
+		filters["name"] = g_calendar
 
 	google_calendars = frappe.get_list("Google Calendar", filters=filters)
 
@@ -280,9 +278,7 @@ def sync_events_from_google_calendar(g_calendar, method=None):
 			else:
 				frappe.throw(msg)
 
-		for event in events.get("items", []):
-			results.append(event)
-
+		results.extend(iter(events.get("items", [])))
 		if not events.get("nextPageToken"):
 			if events.get("nextSyncToken"):
 				account.next_sync_token = events.get("nextSyncToken")
@@ -334,9 +330,6 @@ def sync_events_from_google_calendar(g_calendar, method=None):
 					"content": " - Event deleted from Google Calendar.",
 				}
 			).insert(ignore_permissions=True)
-		else:
-			pass
-
 	if not results:
 		return _("No Google Calendar Event to sync.")
 	elif len(results) == 1:
@@ -360,10 +353,8 @@ def insert_event_to_calendar(account, event, recurrence=None):
 		"google_meet_link": event.get("hangoutLink"),
 		"pulled_from_google_calendar": 1,
 	}
-	calendar_event.update(
-		google_calendar_to_repeat_on(
-			recurrence=recurrence, start=event.get("start"), end=event.get("end")
-		)
+	calendar_event |= google_calendar_to_repeat_on(
+		recurrence=recurrence, start=event.get("start"), end=event.get("end")
 	)
 	frappe.get_doc(calendar_event).insert(ignore_permissions=True)
 
@@ -401,21 +392,19 @@ def insert_event_in_google_calendar(doc, method=None):
 		return
 
 	event = {"summary": doc.subject, "description": doc.description, "google_calendar_event": 1}
-	event.update(
-		format_date_according_to_google_calendar(
-			doc.all_day, get_datetime(doc.starts_on), get_datetime(doc.ends_on)
-		)
+	event |= format_date_according_to_google_calendar(
+		doc.all_day, get_datetime(doc.starts_on), get_datetime(doc.ends_on)
 	)
 
 	if doc.repeat_on:
-		event.update({"recurrence": repeat_on_to_google_calendar_recurrence_rule(doc)})
+		event["recurrence"] = repeat_on_to_google_calendar_recurrence_rule(doc)
 
-	event.update({"attendees": get_attendees(doc)})
+	event["attendees"] = get_attendees(doc)
 
 	conference_data_version = 0
 
 	if doc.add_video_conferencing:
-		event.update({"conferenceData": get_conference_data(doc)})
+		event["conferenceData"] = get_conference_data(doc)
 		conference_data_version = 1
 
 	try:
@@ -456,7 +445,7 @@ def update_event_in_google_calendar(doc, method=None):
 	):
 		return
 
-	if doc.sync_with_google_calendar and not doc.google_calendar_event_id:
+	if not doc.google_calendar_event_id:
 		# If sync_with_google_calendar is checked later, then insert the event rather than updating it.
 		insert_event_in_google_calendar(doc)
 		return
@@ -678,13 +667,13 @@ def parse_google_calendar_recurrence_rule(repeat_day_week_number, repeat_day_nam
 
 	# Set the proper day ie if recurrence is 4TH, then align the day to Thursday
 	while not isset_day_name:
-		isset_day_name = True if weekdays[current_date.weekday()].lower() == repeat_day_name else False
+		isset_day_name = weekdays[current_date.weekday()].lower() == repeat_day_name
 		current_date = add_days(current_date, 1) if not isset_day_name else current_date
 
 	# One the day is set to Thursday, now set the week number ie 4
 	while not isset_day_number:
 		week_number = get_week_number(current_date)
-		isset_day_number = True if week_number == repeat_day_week_number else False
+		isset_day_number = week_number == repeat_day_week_number
 		# check if  current_date week number is greater or smaller than repeat_day week number
 		weeks = 1 if week_number < repeat_day_week_number else -1
 		current_date = add_to_date(current_date, weeks=weeks) if not isset_day_number else current_date
@@ -701,11 +690,11 @@ def repeat_on_to_google_calendar_recurrence_rule(doc):
 
 	if doc.repeat_on == "Weekly":
 		byday = [framework_days.get(day.lower()) for day in weekdays if doc.get(day.lower())]
-		recurrence = recurrence + "BYDAY=" + ",".join(byday)
+		recurrence = f"{recurrence}BYDAY=" + ",".join(byday)
 	elif doc.repeat_on == "Monthly":
 		week_number = str(get_week_number(get_datetime(doc.starts_on)))
 		week_day = weekdays[get_datetime(doc.starts_on).weekday()].lower()
-		recurrence = recurrence + "BYDAY=" + week_number + framework_days.get(week_day)
+		recurrence = f"{recurrence}BYDAY={week_number}{framework_days.get(week_day)}"
 
 	return [recurrence]
 
@@ -736,9 +725,6 @@ def get_recurrence_parameters(recurrence):
 			until = r
 		elif "BYDAY" in r:
 			byday = r
-		else:
-			pass
-
 	return frequency, until, byday
 
 

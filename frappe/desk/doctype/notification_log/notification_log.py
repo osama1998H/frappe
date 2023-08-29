@@ -42,8 +42,11 @@ def get_permission_query_conditions(for_user):
 def get_title(doctype, docname, title_field=None):
 	if not title_field:
 		title_field = frappe.get_meta(doctype).get_title_field()
-	title = docname if title_field == "name" else frappe.db.get_value(doctype, docname, title_field)
-	return title
+	return (
+		docname
+		if title_field == "name"
+		else frappe.db.get_value(doctype, docname, title_field)
+	)
 
 
 def get_title_html(title):
@@ -162,8 +165,7 @@ def mark_all_as_read():
 	unread_docs_list = frappe.get_all(
 		"Notification Log", filters={"read": 0, "for_user": frappe.session.user}
 	)
-	unread_docnames = [doc.name for doc in unread_docs_list]
-	if unread_docnames:
+	if unread_docnames := [doc.name for doc in unread_docs_list]:
 		filters = {"name": ["in", unread_docnames]}
 		frappe.db.set_value("Notification Log", filters, "read", 1, update_modified=False)
 

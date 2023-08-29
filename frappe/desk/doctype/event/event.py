@@ -66,32 +66,33 @@ class Event(Document):
 		self.sync_communication()
 
 	def on_trash(self):
-		communications = frappe.get_all(
-			"Communication", dict(reference_doctype=self.doctype, reference_name=self.name)
-		)
-		if communications:
+		if communications := frappe.get_all(
+			"Communication",
+			dict(reference_doctype=self.doctype, reference_name=self.name),
+		):
 			for communication in communications:
 				frappe.delete_doc_if_exists("Communication", communication.name)
 
 	def sync_communication(self):
-		if self.event_participants:
-			for participant in self.event_participants:
-				filters = [
-					["Communication", "reference_doctype", "=", self.doctype],
-					["Communication", "reference_name", "=", self.name],
-					["Communication Link", "link_doctype", "=", participant.reference_doctype],
-					["Communication Link", "link_name", "=", participant.reference_docname],
-				]
-				comms = frappe.get_all("Communication", filters=filters, fields=["name"])
-
-				if comms:
-					for comm in comms:
-						communication = frappe.get_doc("Communication", comm.name)
-						self.update_communication(participant, communication)
-				else:
-					meta = frappe.get_meta(participant.reference_doctype)
-					if hasattr(meta, "allow_events_in_timeline") and meta.allow_events_in_timeline == 1:
-						self.create_communication(participant)
+		if not self.event_participants:
+			return
+		for participant in self.event_participants:
+			filters = [
+				["Communication", "reference_doctype", "=", self.doctype],
+				["Communication", "reference_name", "=", self.name],
+				["Communication Link", "link_doctype", "=", participant.reference_doctype],
+				["Communication Link", "link_name", "=", participant.reference_docname],
+			]
+			if comms := frappe.get_all(
+				"Communication", filters=filters, fields=["name"]
+			):
+				for comm in comms:
+					communication = frappe.get_doc("Communication", comm.name)
+					self.update_communication(participant, communication)
+			else:
+				meta = frappe.get_meta(participant.reference_doctype)
+				if hasattr(meta, "allow_events_in_timeline") and meta.allow_events_in_timeline == 1:
+					self.create_communication(participant)
 
 	def create_communication(self, participant):
 		communication = frappe.new_doc("Communication")
@@ -168,9 +169,9 @@ def delete_communication(event, reference_doctype, reference_docname):
 		["Communication Link", "link_name", "=", deleted_participant.reference_docname],
 	]
 
-	comms = frappe.get_list("Communication", filters=filters, fields=["name"])
-
-	if comms:
+	if comms := frappe.get_list(
+		"Communication", filters=filters, fields=["name"]
+	):
 		deletion = []
 		for comm in comms:
 			delete = frappe.get_doc("Communication", comm.name).delete()
@@ -190,10 +191,7 @@ def get_permission_query_conditions(user):
 
 
 def has_permission(doc, user):
-	if doc.event_type == "Public" or doc.owner == user:
-		return True
-
-	return False
+	return doc.event_type == "Public" or doc.owner == user
 
 
 def send_event_digest():
@@ -207,8 +205,7 @@ def send_event_digest():
 	]
 
 	for user in users:
-		events = get_events(today, today, user.name, for_reminder=True)
-		if events:
+		if events := get_events(today, today, user.name, for_reminder=True):
 			frappe.set_user_lang(user.name, user.language)
 
 			for e in events:
@@ -320,9 +317,9 @@ def get_events(start, end, user=None, for_reminder=False, filters=None) -> list[
 			else date
 		)
 
-		new_event.starts_on = date + " " + e.starts_on.split(" ")[1]
+		new_event.starts_on = f"{date} " + e.starts_on.split(" ")[1]
 		new_event.ends_on = new_event.ends_on = (
-			enddate + " " + e.ends_on.split(" ")[1] if e.ends_on else None
+			f"{enddate} " + e.ends_on.split(" ")[1] if e.ends_on else None
 		)
 
 		add_events.append(new_event)
@@ -345,7 +342,7 @@ def get_events(start, end, user=None, for_reminder=False, filters=None) -> list[
 
 				# repeat for all years in period
 				for year in range(start_year, end_year + 1):
-					date = str(year) + "-" + event_start
+					date = f"{str(year)}-{event_start}"
 					if (
 						getdate(date) >= getdate(start)
 						and getdate(date) <= getdate(end)
@@ -365,7 +362,7 @@ def get_events(start, end, user=None, for_reminder=False, filters=None) -> list[
 					getdate(date)
 				except Exception:
 					date = date.split("-")
-					date = date[0] + "-" + str(cint(date[1]) - 1) + "-" + date[2]
+					date = f"{date[0]}-{str(cint(date[1]) - 1)}-{date[2]}"
 
 				start_from = date
 				for i in range(int(date_diff(end, start) / 30) + 3):
@@ -420,13 +417,15 @@ def get_events(start, end, user=None, for_reminder=False, filters=None) -> list[
 
 
 def delete_events(ref_type, ref_name, delete_event=False):
-	participations = frappe.get_all(
+	if participations := frappe.get_all(
 		"Event Participants",
-		filters={"reference_doctype": ref_type, "reference_docname": ref_name, "parenttype": "Event"},
+		filters={
+			"reference_doctype": ref_type,
+			"reference_docname": ref_name,
+			"parenttype": "Event",
+		},
 		fields=["parent", "name"],
-	)
-
-	if participations:
+	):
 		for participation in participations:
 			if delete_event:
 				frappe.delete_doc("Event", participation.parent, for_reload=True)

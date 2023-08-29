@@ -112,14 +112,11 @@ class EmailQueue(Document):
 		return self.status in ["Not Sent", "Partially Sent"]
 
 	def can_send_now(self):
-		if (
-			frappe.are_emails_muted()
-			or not self.is_to_be_sent()
-			or cint(frappe.db.get_default("suspend_email_queue")) == 1
-		):
-			return False
-
-		return True
+		return bool(
+			not frappe.are_emails_muted()
+			and self.is_to_be_sent()
+			and cint(frappe.db.get_default("suspend_email_queue")) != 1
+		)
 
 	def send(self, is_background_task: bool = False, smtp_server_instance: SMTPServer = None):
 		"""Send emails to recipients."""
@@ -133,8 +130,7 @@ class EmailQueue(Document):
 					continue
 
 				message = ctx.build_message(recipient.recipient)
-				method = get_hook_method("override_email_send")
-				if method:
+				if method := get_hook_method("override_email_send"):
 					method(self, self.sender, recipient.recipient, message)
 				else:
 					if not frappe.flags.in_test:
@@ -362,7 +358,7 @@ def retry_sending(name):
 	doc = frappe.get_doc("Email Queue", name)
 	doc.check_permission()
 
-	if doc and (doc.status == "Error" or doc.status == "Partially Errored"):
+	if doc and doc.status in ["Error", "Partially Errored"]:
 		doc.status = "Not Sent"
 		for d in doc.recipients:
 			if d.status != "Sent":
@@ -372,8 +368,7 @@ def retry_sending(name):
 
 @frappe.whitelist()
 def send_now(name):
-	record = EmailQueue.find(name)
-	if record:
+	if record := EmailQueue.find(name):
 		record.check_permission()
 		record.send()
 
@@ -572,7 +567,7 @@ class QueueBuilder:
 
 		EmailUnsubscribe = DocType("Email Unsubscribe")
 
-		if len(all_ids) > 0:
+		if all_ids:
 			unsubscribed = (
 				frappe.qb.from_(EmailUnsubscribe)
 				.select(EmailUnsubscribe.email)
@@ -698,9 +693,7 @@ class QueueBuilder:
 			# bad Email Address - don't add to queue
 			frappe.log_error(
 				title="Invalid email address",
-				message="Invalid email address Sender: {}, Recipients: {}, \nTraceback: {} ".format(
-					self.sender, ", ".join(self.final_recipients()), traceback.format_exc()
-				),
+				message=f'Invalid email address Sender: {self.sender}, Recipients: {", ".join(self.final_recipients())}, \nTraceback: {traceback.format_exc()} ',
 				reference_doctype=self.reference_doctype,
 				reference_name=self.reference_name,
 			)

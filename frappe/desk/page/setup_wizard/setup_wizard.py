@@ -53,13 +53,12 @@ def setup_complete(args):
 
 	args = parse_args(args)
 	stages = get_setup_stages(args)
-	is_background_task = frappe.conf.get("trigger_site_setup_in_background")
-
-	if is_background_task:
-		process_setup_stages.enqueue(stages=stages, user_input=args, is_background_task=True)
-		return {"status": "registered"}
-	else:
+	if not (
+		is_background_task := frappe.conf.get("trigger_site_setup_in_background")
+	):
 		return process_setup_stages(stages, args)
+	process_setup_stages.enqueue(stages=stages, user_input=args, is_background_task=True)
+	return {"status": "registered"}
 
 
 @frappe.task()
@@ -76,7 +75,7 @@ def process_setup_stages(stages, user_input, is_background_task=False):
 
 			for task in stage.get("tasks"):
 				current_task = task
-				task.get("fn")(task.get("args"))
+				current_task.get("fn")(current_task.get("args"))
 	except Exception:
 		handle_setup_exception(user_input)
 		if not is_background_task:
@@ -125,18 +124,20 @@ def get_stages_hooks(args):
 
 
 def get_setup_complete_hooks(args):
-	stages = []
-	for method in frappe.get_hooks("setup_wizard_complete"):
-		stages.append(
-			{
-				"status": "Executing method",
-				"fail_msg": "Failed to execute method",
-				"tasks": [
-					{"fn": frappe.get_attr(method), "args": args, "fail_msg": "Failed to execute method"}
-				],
-			}
-		)
-	return stages
+	return [
+		{
+			"status": "Executing method",
+			"fail_msg": "Failed to execute method",
+			"tasks": [
+				{
+					"fn": frappe.get_attr(method),
+					"args": args,
+					"fail_msg": "Failed to execute method",
+				}
+			],
+		}
+		for method in frappe.get_hooks("setup_wizard_complete")
+	]
 
 
 def handle_setup_exception(args):
@@ -298,9 +299,7 @@ def load_languages():
 	language_codes = frappe.db.sql(
 		"select language_code, language_name from tabLanguage order by name", as_dict=True
 	)
-	codes_to_names = {}
-	for d in language_codes:
-		codes_to_names[d.language_code] = d.language_name
+	codes_to_names = {d.language_code: d.language_name for d in language_codes}
 	return {
 		"default_language": frappe.db.get_value("Language", frappe.local.lang, "language_name")
 		or frappe.local.lang,
@@ -332,10 +331,7 @@ def prettify_args(args):
 			size = round((len(val) * 3 / 4) / 1048576.0, 2)
 			args[key] = f"Image Attached: '{filename}' of size {size} MB"
 
-	pretty_args = []
-	for key in sorted(args):
-		pretty_args.append(f"{key} = {args[key]}")
-	return pretty_args
+	return [f"{key} = {args[key]}" for key in sorted(args)]
 
 
 def email_setup_wizard_exception(traceback, args):
@@ -418,7 +414,7 @@ def make_records(records, debug=False):
 		doc.update(record)
 
 		# ignore mandatory for root
-		parent_link_field = "parent_" + scrub(doc.doctype)
+		parent_link_field = f"parent_{scrub(doc.doctype)}"
 		if doc.meta.get_field(parent_link_field) and not doc.get(parent_link_field):
 			doc.flags.ignore_mandatory = True
 
@@ -429,8 +425,7 @@ def make_records(records, debug=False):
 		except Exception as e:
 			frappe.clear_last_message()
 			frappe.db.rollback(save_point=savepoint)
-			exception = record.get("__exception")
-			if exception:
+			if exception := record.get("__exception"):
 				config = _dict(exception)
 				if isinstance(e, config.exception):
 					config.handler()

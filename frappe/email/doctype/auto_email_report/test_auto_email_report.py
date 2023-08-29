@@ -44,8 +44,8 @@ class TestAutoEmailReport(FrappeTestCase):
 
 
 def get_auto_email_report():
-	if not frappe.db.exists("Auto Email Report", "Permitted Documents For User"):
-		auto_email_report = frappe.get_doc(
+	return (
+		frappe.get_doc(
 			dict(
 				doctype="Auto Email Report",
 				report="Permitted Documents For User",
@@ -58,7 +58,8 @@ def get_auto_email_report():
 				filters=json.dumps(dict(user="Administrator", doctype="DocType")),
 			)
 		).insert()
-	else:
-		auto_email_report = frappe.get_doc("Auto Email Report", "Permitted Documents For User")
-
-	return auto_email_report
+		if not frappe.db.exists(
+			"Auto Email Report", "Permitted Documents For User"
+		)
+		else frappe.get_doc("Auto Email Report", "Permitted Documents For User")
+	)

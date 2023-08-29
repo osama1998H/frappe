@@ -157,9 +157,7 @@ class PostgresDatabase(PostgresExceptionUtil, Database):
 
 	def get_connection(self):
 		conn = psycopg2.connect(
-			"host='{}' dbname='{}' user='{}' password='{}' port={}".format(
-				self.host, self.user, self.user, self.password, self.port
-			)
+			f"host='{self.host}' dbname='{self.user}' user='{self.user}' password='{self.password}' port={self.port}"
 		)
 		conn.set_isolation_level(ISOLATION_LEVEL_REPEATABLE_READ)
 
@@ -167,7 +165,7 @@ class PostgresDatabase(PostgresExceptionUtil, Database):
 
 	def set_execution_timeout(self, seconds: int):
 		# Postgres expects milliseconds as input
-		self.sql("set local statement_timeout = %s", int(seconds) * 1000)
+		self.sql("set local statement_timeout = %s", seconds * 1000)
 
 	def escape(self, s, percent=True):
 		"""Escape quotes and percent in given string."""
@@ -273,7 +271,7 @@ class PostgresDatabase(PostgresExceptionUtil, Database):
 		)
 
 	def create_global_search_table(self):
-		if not "__global_search" in self.get_tables():
+		if "__global_search" not in self.get_tables():
 			self.sql(
 				"""create table "__global_search"(
 				doctype varchar(100),
@@ -355,7 +353,7 @@ class PostgresDatabase(PostgresExceptionUtil, Database):
 			WHERE table_name=%s
 			AND constraint_type='UNIQUE'
 			AND CONSTRAINT_NAME=%s""",
-			("tab" + doctype, constraint_name),
+			(f"tab{doctype}", constraint_name),
 		):
 			self.commit()
 			self.sql(

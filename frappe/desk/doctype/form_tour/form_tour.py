@@ -15,12 +15,11 @@ class FormTour(Document):
 				step.child_doctype = parent_field_df.options
 
 				field_df = frappe.get_meta(step.child_doctype).get_field(step.fieldname)
-				step.label = field_df.label
-				step.fieldtype = field_df.fieldtype
 			else:
 				field_df = meta.get_field(step.fieldname)
-				step.label = field_df.label
-				step.fieldtype = field_df.fieldtype
+
+			step.fieldtype = field_df.fieldtype
+			step.label = field_df.label
 
 	def on_update(self):
 		if frappe.conf.developer_mode and self.is_standard:

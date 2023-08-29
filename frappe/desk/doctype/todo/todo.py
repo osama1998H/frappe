@@ -17,30 +17,30 @@ class ToDo(Document):
 		self._assignment = None
 		if self.is_new():
 
-			if self.assigned_by == self.allocated_to:
-				assignment_message = frappe._("{0} self assigned this task: {1}").format(
+			assignment_message = (
+				frappe._("{0} self assigned this task: {1}").format(
 					get_fullname(self.assigned_by), self.description
 				)
-			else:
-				assignment_message = frappe._("{0} assigned {1}: {2}").format(
-					get_fullname(self.assigned_by), get_fullname(self.allocated_to), self.description
+				if self.assigned_by == self.allocated_to
+				else frappe._("{0} assigned {1}: {2}").format(
+					get_fullname(self.assigned_by),
+					get_fullname(self.allocated_to),
+					self.description,
 				)
-
+			)
 			self._assignment = {"text": assignment_message, "comment_type": "Assigned"}
 
-		else:
-			# NOTE the previous value is only available in validate method
-			if self.get_db_value("status") != self.status:
-				if self.allocated_to == frappe.session.user:
-					removal_message = frappe._("{0} removed their assignment.").format(
-						get_fullname(frappe.session.user)
-					)
-				else:
-					removal_message = frappe._("Assignment of {0} removed by {1}").format(
-						get_fullname(self.allocated_to), get_fullname(frappe.session.user)
-					)
+		elif self.get_db_value("status") != self.status:
+			if self.allocated_to == frappe.session.user:
+				removal_message = frappe._("{0} removed their assignment.").format(
+					get_fullname(frappe.session.user)
+				)
+			else:
+				removal_message = frappe._("Assignment of {0} removed by {1}").format(
+					get_fullname(self.allocated_to), get_fullname(frappe.session.user)
+				)
 
-				self._assignment = {"text": removal_message, "comment_type": "Assignment Completed"}
+			self._assignment = {"text": removal_message, "comment_type": "Assignment Completed"}
 
 	def on_update(self):
 		if self._assignment:

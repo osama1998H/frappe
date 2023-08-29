@@ -73,8 +73,7 @@ def generate_report(prepared_report):
 			reference_report = custom_report_doc.reference_report
 			report = frappe.get_doc("Report", reference_report)
 			if custom_report_doc.json:
-				data = json.loads(custom_report_doc.json)
-				if data:
+				if data := json.loads(custom_report_doc.json):
 					report.custom_columns = data["columns"]
 
 		result = generate_report_result(report=report, filters=instance.filters, user=instance.owner)
@@ -127,7 +126,7 @@ def process_filters_for_prepared_report(filters: dict[str, Any] | str) -> str:
 
 @frappe.whitelist()
 def get_reports_in_queued_state(report_name, filters):
-	reports = frappe.get_all(
+	return frappe.get_all(
 		"Prepared Report",
 		filters={
 			"report_name": report_name,
@@ -136,7 +135,6 @@ def get_reports_in_queued_state(report_name, filters):
 			"owner": frappe.session.user,
 		},
 	)
-	return reports
 
 
 def get_completed_prepared_report(filters, user, report_name):
@@ -163,9 +161,7 @@ def delete_prepared_reports(reports):
 def create_json_gz_file(data, dt, dn):
 	# Storing data in CSV file causes information loss
 	# Reports like P&L Statement were completely unsuable because of this
-	json_filename = "{}.json.gz".format(
-		frappe.utils.data.format_datetime(frappe.utils.now(), "Y-m-d-H:M")
-	)
+	json_filename = f'{frappe.utils.data.format_datetime(frappe.utils.now(), "Y-m-d-H:M")}.json.gz'
 	encoded_content = frappe.safe_encode(frappe.as_json(data))
 	compressed_content = gzip_compress(encoded_content)
 

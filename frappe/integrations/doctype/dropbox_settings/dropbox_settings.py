@@ -290,14 +290,10 @@ def get_dropbox_settings(redirect_uri=False):
 	}
 
 	if redirect_uri:
-		app_details.update(
-			{
-				"redirect_uri": get_request_site_address(True)
-				+ "/api/method/frappe.integrations.doctype.dropbox_settings.dropbox_settings.dropbox_auth_finish"
-				if settings.app_secret_key
-				else frappe.conf.dropbox_broker_site
-				+ "/api/method/dropbox_erpnext_broker.www.setup_dropbox.generate_dropbox_access_token",
-			}
+		app_details["redirect_uri"] = (
+			f"{get_request_site_address(True)}/api/method/frappe.integrations.doctype.dropbox_settings.dropbox_settings.dropbox_auth_finish"
+			if settings.app_secret_key
+			else f"{frappe.conf.dropbox_broker_site}/api/method/dropbox_erpnext_broker.www.setup_dropbox.generate_dropbox_access_token"
 		)
 
 	if not app_details["app_key"] or not app_details["app_secret"]:
@@ -308,11 +304,11 @@ def get_dropbox_settings(redirect_uri=False):
 
 def delete_older_backups(dropbox_client, folder_path, to_keep):
 	res = dropbox_client.files_list_folder(path=folder_path)
-	files = []
-	for f in res.entries:
-		if isinstance(f, dropbox.files.FileMetadata) and "sql" in f.name:
-			files.append(f)
-
+	files = [
+		f
+		for f in res.entries
+		if isinstance(f, dropbox.files.FileMetadata) and "sql" in f.name
+	]
 	if len(files) <= to_keep:
 		return
 
@@ -325,9 +321,7 @@ def delete_older_backups(dropbox_client, folder_path, to_keep):
 def get_redirect_url():
 	if not frappe.conf.dropbox_broker_site:
 		frappe.conf.dropbox_broker_site = "https://dropbox.erpnext.com"
-	url = "{}/api/method/dropbox_erpnext_broker.www.setup_dropbox.get_authotize_url".format(
-		frappe.conf.dropbox_broker_site
-	)
+	url = f"{frappe.conf.dropbox_broker_site}/api/method/dropbox_erpnext_broker.www.setup_dropbox.get_authotize_url"
 
 	try:
 		response = make_post_request(url, data={"site": get_url()})

@@ -59,8 +59,7 @@ def import_controller(doctype):
 
 	module_name = "Core"
 	if doctype not in DOCTYPES_FOR_DOCTYPE:
-		doctype_info = frappe.db.get_value("DocType", doctype, fieldname="*")
-		if doctype_info:
+		if doctype_info := frappe.db.get_value("DocType", doctype, fieldname="*"):
 			if doctype_info.custom:
 				return NestedSet if doctype_info.is_tree else Document
 			module_name = doctype_info.module
@@ -275,11 +274,7 @@ class BaseDocument:
 			value.docstatus = DocStatus.draft()
 
 		if not getattr(value, "idx", None):
-			if table := getattr(self, key, None):
-				value.idx = len(table) + 1
-			else:
-				value.idx = 1
-
+			value.idx = len(table) + 1 if (table := getattr(self, key, None)) else 1
 		if not getattr(value, "name", None):
 			value.__dict__["__islocal"] = 1
 
@@ -506,12 +501,14 @@ class BaseDocument:
 		columns = list(d)
 		try:
 			frappe.db.sql(
-				"""INSERT INTO `tab{doctype}` ({columns})
+				(
+					"""INSERT INTO `tab{doctype}` ({columns})
 					VALUES ({values}) {conflict_handler}""".format(
-					doctype=self.doctype,
-					columns=", ".join("`" + c + "`" for c in columns),
-					values=", ".join(["%s"] * len(columns)),
-					conflict_handler=conflict_handler,
+						doctype=self.doctype,
+						columns=", ".join(f"`{c}`" for c in columns),
+						values=", ".join(["%s"] * len(columns)),
+						conflict_handler=conflict_handler,
+					)
 				),
 				list(d.values()),
 			)
@@ -562,9 +559,12 @@ class BaseDocument:
 
 		try:
 			frappe.db.sql(
-				"""UPDATE `tab{doctype}`
+				(
+					"""UPDATE `tab{doctype}`
 				SET {values} WHERE `name`=%s""".format(
-					doctype=self.doctype, values=", ".join("`" + c + "`=%s" for c in columns)
+						doctype=self.doctype,
+						values=", ".join(f"`{c}`=%s" for c in columns),
+					)
 				),
 				list(d.values()) + [name],
 			)
@@ -637,8 +637,7 @@ class BaseDocument:
 		Returns:
 		        str: The label associated with the fieldname, if found, otherwise `None`.
 		"""
-		df = self.meta.get_field(fieldname)
-		if df:
+		if df := self.meta.get_field(fieldname):
 			return df.label
 
 	def update_modified(self):
@@ -813,7 +812,11 @@ class BaseDocument:
 			return
 
 		for df in self.meta.get_select_fields():
-			if df.fieldname == "naming_series" or not (self.get(df.fieldname) and df.options):
+			if (
+				df.fieldname == "naming_series"
+				or not self.get(df.fieldname)
+				or not df.options
+			):
 				continue
 
 			options = (df.options or "").split("\n")
@@ -882,7 +885,7 @@ class BaseDocument:
 			df = self.meta.get_field(fieldname)
 
 			# This conversion to string only when fieldtype is Date
-			if df.fieldtype == "Date" or df.fieldtype == "Datetime":
+			if df.fieldtype in ["Date", "Datetime"]:
 				value = str(values.get(fieldname))
 
 			else:
@@ -1177,33 +1180,35 @@ class BaseDocument:
 
 	def reset_values_if_no_permlevel_access(self, has_access_to, high_permlevel_fields):
 		"""If the user does not have permissions at permlevel > 0, then reset the values to original / default"""
-		to_reset = []
-
-		for df in high_permlevel_fields:
-			if (
-				df.permlevel not in has_access_to
-				and df.fieldtype not in display_fieldtypes
-				and df.fieldname not in self.flags.get("ignore_permlevel_for_fields", [])
-			):
-				to_reset.append(df)
-
-		if to_reset:
-			if self.is_new():
-				# if new, set default value
-				ref_doc = frappe.new_doc(self.doctype)
+		if not (
+			to_reset := [
+				df
+				for df in high_permlevel_fields
+				if (
+					df.permlevel not in has_access_to
+					and df.fieldtype not in display_fieldtypes
+					and df.fieldname
+					not in self.flags.get("ignore_permlevel_for_fields", [])
+				)
+			]
+		):
+			return
+		if self.is_new():
+			# if new, set default value
+			ref_doc = frappe.new_doc(self.doctype)
+		elif self.get("parent_doc"):
+			parent_doc = self.parent_doc.get_latest()
+			if child_docs := [
+				d for d in parent_doc.get(self.parentfield) if d.name == self.name
+			]:
+				ref_doc = child_docs[0]
 			else:
-				# get values from old doc
-				if self.get("parent_doc"):
-					parent_doc = self.parent_doc.get_latest()
-					child_docs = [d for d in parent_doc.get(self.parentfield) if d.name == self.name]
-					if not child_docs:
-						return
-					ref_doc = child_docs[0]
-				else:
-					ref_doc = self.get_latest()
+				return
+		else:
+			ref_doc = self.get_latest()
 
-			for df in to_reset:
-				self.set(df.fieldname, ref_doc.get(df.fieldname))
+		for df in to_reset:
+			self.set(df.fieldname, ref_doc.get(df.fieldname))
 
 	def get_value(self, fieldname):
 		df = self.meta.get_field(fieldname)

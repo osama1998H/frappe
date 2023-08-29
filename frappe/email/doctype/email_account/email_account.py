@@ -82,7 +82,9 @@ class EmailAccount(Document):
 			return
 
 		use_oauth = self.auth_method == "OAuth"
-		validate_oauth = use_oauth and not (self.is_new() and not self.get_oauth_token())
+		validate_oauth = use_oauth and bool(
+			not self.is_new() or self.get_oauth_token()
+		)
 		self.use_starttls = cint(self.use_imap and self.use_starttls and not self.use_ssl)
 
 		if use_oauth:
@@ -98,10 +100,9 @@ class EmailAccount(Document):
 
 				if self.enable_outgoing:
 					self.validate_smtp_conn()
-			else:
-				if self.enable_incoming or (self.enable_outgoing and not self.no_smtp_authentication):
-					if not use_oauth:
-						frappe.throw(_("Password is required or select Awaiting Password"))
+			elif self.enable_incoming or (self.enable_outgoing and not self.no_smtp_authentication):
+				if not use_oauth:
+					frappe.throw(_("Password is required or select Awaiting Password"))
 
 		if self.notify_if_unreplied:
 			if not self.send_notification_to:
@@ -246,18 +247,17 @@ class EmailAccount(Document):
 				frappe.throw(cstr(e))
 
 		except OSError:
-			if in_receive:
-				# timeout while connecting, see receive.py connect method
-				description = frappe.message_log.pop() if frappe.message_log else "Socket Error"
-				if test_internet():
-					self.db_set("no_failed", self.no_failed + 1)
-					if self.no_failed > 2:
-						self.handle_incoming_connect_error(description=description)
-				else:
-					frappe.cache().set_value("workers:no-internet", True)
-				return None
-			else:
+			if not in_receive:
 				raise
+			# timeout while connecting, see receive.py connect method
+			description = frappe.message_log.pop() if frappe.message_log else "Socket Error"
+			if test_internet():
+				self.db_set("no_failed", self.no_failed + 1)
+				if self.no_failed > 2:
+					self.handle_incoming_connect_error(description=description)
+			else:
+				frappe.cache().set_value("workers:no-internet", True)
+			return None
 
 	@property
 	def _password(self):
@@ -316,17 +316,18 @@ class EmailAccount(Document):
 		"""
 		if match_by_email:
 			match_by_email = parse_addr(match_by_email)[1]
-			doc = cls.find_one_by_filters(enable_outgoing=1, email_id=match_by_email)
-			if doc:
+			if doc := cls.find_one_by_filters(
+				enable_outgoing=1, email_id=match_by_email
+			):
 				return {match_by_email: doc}
 
 		if match_by_doctype:
-			doc = cls.find_one_by_filters(enable_outgoing=1, enable_incoming=1, append_to=match_by_doctype)
-			if doc:
+			if doc := cls.find_one_by_filters(
+				enable_outgoing=1, enable_incoming=1, append_to=match_by_doctype
+			):
 				return {match_by_doctype: doc}
 
-		doc = cls.find_default_outgoing()
-		if doc:
+		if doc := cls.find_default_outgoing():
 			return {"default": doc}
 
 	@classmethod
@@ -355,8 +356,7 @@ class EmailAccount(Document):
 
 	@classmethod
 	def find_default_incoming(cls):
-		doc = cls.find_one_by_filters(enable_incoming=1, default_incoming=1)
-		return doc
+		return cls.find_one_by_filters(enable_incoming=1, default_incoming=1)
 
 	@classmethod
 	def get_account_details_from_site_config(cls):
@@ -432,7 +432,6 @@ class EmailAccount(Document):
 						)
 					except assign_to.DuplicateToDoError:
 						frappe.message_log.pop()
-						pass
 			else:
 				self.set_failed_attempts_count(self.get_failed_attempts_count() + 1)
 		else:
@@ -562,8 +561,7 @@ class EmailAccount(Document):
 	def get_unreplied_notification_emails(self):
 		"""Return list of emails listed"""
 		self.send_notification_to = self.send_notification_to.replace(",", "\n")
-		out = [e.strip() for e in self.send_notification_to.split("\n") if e.strip()]
-		return out
+		return [e.strip() for e in self.send_notification_to.split("\n") if e.strip()]
 
 	def on_trash(self):
 		"""Clear communications where email account is linked"""
@@ -581,12 +579,11 @@ class EmailAccount(Document):
 		if not self.use_imap:
 			return "UNSEEN"
 
-		if self.email_sync_option == "ALL":
-			max_uid = get_max_email_uid(self.name)
-			last_uid = max_uid + int(self.initial_sync_count or 100) if max_uid == 1 else "*"
-			return f"UID {max_uid}:{last_uid}"
-		else:
+		if self.email_sync_option != "ALL":
 			return self.email_sync_option or "UNSEEN"
+		max_uid = get_max_email_uid(self.name)
+		last_uid = max_uid + int(self.initial_sync_count or 100) if max_uid == 1 else "*"
+		return f"UID {max_uid}:{last_uid}"
 
 	def mark_emails_as_read_unread(self, email_server=None, folder_name="INBOX"):
 		"""mark Email Flag Queue of self.email_account mails as read"""
@@ -611,17 +608,23 @@ class EmailAccount(Document):
 
 			# mark communication as read
 			docnames = ",".join(
-				"'%s'" % flag.get("communication") for flag in flags if flag.get("action") == "Read"
+				f"""'{flag.get("communication")}'"""
+				for flag in flags
+				if flag.get("action") == "Read"
 			)
 			self.set_communication_seen_status(docnames, seen=1)
 
 			# mark communication as unread
 			docnames = ",".join(
-				["'%s'" % flag.get("communication") for flag in flags if flag.get("action") == "Unread"]
+				[
+					f"""'{flag.get("communication")}'"""
+					for flag in flags
+					if flag.get("action") == "Unread"
+				]
 			)
 			self.set_communication_seen_status(docnames, seen=0)
 
-			docnames = ",".join(["'%s'" % flag.get("name") for flag in flags])
+			docnames = ",".join([f"""'{flag.get("name")}'""" for flag in flags])
 
 			EmailFlagQueue = frappe.qb.DocType("Email Flag Queue")
 			frappe.qb.update(EmailFlagQueue).set(EmailFlagQueue.is_completed, 1).where(
@@ -677,22 +680,24 @@ def get_append_to(
 	doctype=None, txt=None, searchfield=None, start=None, page_len=None, filters=None
 ):
 	txt = txt if txt else ""
-	email_append_to_list = []
-
 	# Set Email Append To DocTypes via DocType
 	filters = {"istable": 0, "issingle": 0, "email_append_to": 1}
-	for dt in frappe.get_all("DocType", filters=filters, fields=["name", "email_append_to"]):
-		email_append_to_list.append(dt.name)
-
+	email_append_to_list = [
+		dt.name
+		for dt in frappe.get_all(
+			"DocType", filters=filters, fields=["name", "email_append_to"]
+		)
+	]
 	# Set Email Append To DocTypes set via Customize Form
-	for dt in frappe.get_list(
-		"Property Setter", filters={"property": "email_append_to", "value": 1}, fields=["doc_type"]
-	):
-		email_append_to_list.append(dt.doc_type)
-
-	email_append_to = [[d] for d in set(email_append_to_list) if txt in d]
-
-	return email_append_to
+	email_append_to_list.extend(
+		dt.doc_type
+		for dt in frappe.get_list(
+			"Property Setter",
+			filters={"property": "email_append_to", "value": 1},
+			fields=["doc_type"],
+		)
+	)
+	return [[d] for d in set(email_append_to_list) if txt in d]
 
 
 def test_internet(host="8.8.8.8", port=53, timeout=3):
@@ -827,11 +832,7 @@ def get_max_email_uid(email_account):
 		fields=["max(uid) as uid"],
 	)
 
-	if not result:
-		return 1
-	else:
-		max_uid = cint(result[0].get("uid", 0)) + 1
-		return max_uid
+	return 1 if not result else cint(result[0].get("uid", 0)) + 1
 
 
 def setup_user_email_inbox(

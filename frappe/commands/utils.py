@@ -247,11 +247,7 @@ def execute(context, method, args=None, kwargs=None, profile=False):
 			else:
 				args = ()
 
-			if kwargs:
-				kwargs = eval(kwargs)
-			else:
-				kwargs = {}
-
+			kwargs = eval(kwargs) if kwargs else {}
 			if profile:
 				import cProfile
 
@@ -262,7 +258,9 @@ def execute(context, method, args=None, kwargs=None, profile=False):
 				ret = frappe.get_attr(method)(*args, **kwargs)
 			except Exception:
 				ret = frappe.safe_eval(
-					method + "(*args, **kwargs)", eval_globals=globals(), eval_locals=locals()
+					f"{method}(*args, **kwargs)",
+					eval_globals=globals(),
+					eval_locals=locals(),
 				)
 
 			if profile:
@@ -565,7 +563,7 @@ def _psql(extra_args=None):
 	conn_string = f"postgresql://{frappe.conf.db_name}@{host}:{port}/{frappe.conf.db_name}"
 	psql_cmd = [psql, conn_string]
 	if extra_args:
-		psql_cmd = psql_cmd + list(extra_args)
+		psql_cmd += list(extra_args)
 	subprocess.run(psql_cmd, check=True, env=env)
 
 
@@ -655,9 +653,9 @@ def console(context, autoreload=False):
 			failed_to_import.append(app)
 			all_apps.remove(app)
 
-	print("Apps in this namespace:\n{}".format(", ".join(all_apps)))
+	print(f'Apps in this namespace:\n{", ".join(all_apps)}')
 	if failed_to_import:
-		print("\nFailed to import:\n{}".format(", ".join(failed_to_import)))
+		print(f'\nFailed to import:\n{", ".join(failed_to_import)}')
 
 	terminal.colors = "neutral"
 	terminal.display_banner = False
@@ -974,10 +972,7 @@ def serve(
 	"Start development web server"
 	import frappe.app
 
-	if not context.sites:
-		site = None
-	else:
-		site = context.sites[0]
+	site = None if not context.sites else context.sites[0]
 	with CodeCoverage(with_coverage, "frappe"):
 		if with_coverage:
 			# unable to track coverage with threading enabled
@@ -1113,7 +1108,7 @@ def get_version(output):
 
 	for app in sorted(frappe.get_all_apps()):
 		module = frappe.get_module(app)
-		app_hooks = frappe.get_module(app + ".hooks")
+		app_hooks = frappe.get_module(f"{app}.hooks")
 
 		app_info = frappe._dict()
 

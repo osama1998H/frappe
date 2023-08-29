@@ -15,14 +15,14 @@ from frappe.utils import cstr, random_string
 class CustomField(Document):
 	def autoname(self):
 		self.set_fieldname()
-		self.name = self.dt + "-" + self.fieldname
+		self.name = f"{self.dt}-{self.fieldname}"
 
 	def set_fieldname(self):
 		if not self.fieldname:
 			label = self.label
 			if not label:
 				if self.fieldtype in ["Section Break", "Column Break", "Tab Break"]:
-					label = self.fieldtype + "_" + str(random_string(5))
+					label = f"{self.fieldtype}_{str(random_string(5))}"
 				else:
 					frappe.throw(_("Label is mandatory"))
 

@@ -151,11 +151,10 @@ def get_percentage_difference(doc, filters, result):
 	previous_result = calculate_previous_result(doc, filters)
 	if previous_result == 0:
 		return None
+	if result == previous_result:
+		return 0
 	else:
-		if result == previous_result:
-			return 0
-		else:
-			return ((result / previous_result) - 1) * 100.0
+		return ((result / previous_result) - 1) * 100.0
 
 
 def calculate_previous_result(doc, filters):
@@ -171,8 +170,7 @@ def calculate_previous_result(doc, filters):
 	else:
 		previous_date = add_to_date(current_date, years=-1)
 
-	number = get_result(doc, filters, previous_date)
-	return number
+	return get_result(doc, filters, previous_date)
 
 
 @frappe.whitelist()

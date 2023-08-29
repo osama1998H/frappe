@@ -36,9 +36,8 @@ def send(email, append_to=None, retry=1):
 		except (smtplib.SMTPServerDisconnected, smtplib.SMTPAuthenticationError):
 			if not retry:
 				raise
-			else:
-				retry = retry - 1
-				_send(retry)
+			retry = retry - 1
+			_send(retry)
 
 	_send(retry)
 

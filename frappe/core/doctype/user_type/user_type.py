@@ -104,13 +104,11 @@ class UserType(Document):
 		user.append("roles", {"role": self.role})
 
 	def update_modules_in_user(self, user):
-		block_modules = frappe.get_all(
+		if block_modules := frappe.get_all(
 			"Module Def",
 			fields=["name as module"],
 			filters={"name": ["not in", [d.module for d in self.user_type_modules]]},
-		)
-
-		if block_modules:
+		):
 			user.set("block_modules", block_modules)
 
 	def add_role_permissions_for_user_doctypes(self):
@@ -138,8 +136,7 @@ class UserType(Document):
 			self.prepare_select_perm_doctypes(doc, user_doctypes, select_doctypes)
 
 			for child_table in doc.get_table_fields():
-				child_doc = frappe.get_meta(child_table.options)
-				if child_doc:
+				if child_doc := frappe.get_meta(child_table.options):
 					self.prepare_select_perm_doctypes(child_doc, user_doctypes, select_doctypes)
 
 		if select_doctypes:
@@ -171,9 +168,7 @@ class UserType(Document):
 		doctypes.append("File")
 
 		for doctype in ["select_doctypes", "custom_select_doctypes"]:
-			for dt in self.get(doctype):
-				doctypes.append(dt.document_type)
-
+			doctypes.extend(dt.document_type for dt in self.get(doctype))
 		for perm in frappe.get_all(
 			"Custom DocPerm", filters={"role": self.role, "parent": ["not in", doctypes]}
 		):
@@ -267,22 +262,21 @@ def user_linked_with_permission_on_doctype(doc, user):
 
 	if frappe.db.get_value(doc.apply_user_permission_on, {doc.user_id_field: user}, "name"):
 		return True
-	else:
-		label = frappe.get_meta(doc.apply_user_permission_on).get_field(doc.user_id_field).label
+	label = frappe.get_meta(doc.apply_user_permission_on).get_field(doc.user_id_field).label
 
-		frappe.msgprint(
-			_(
-				"To set the role {0} in the user {1}, kindly set the {2} field as {3} in one of the {4} record."
-			).format(
-				frappe.bold(doc.role),
-				frappe.bold(user),
-				frappe.bold(label),
-				frappe.bold(user),
-				frappe.bold(doc.apply_user_permission_on),
-			)
+	frappe.msgprint(
+		_(
+			"To set the role {0} in the user {1}, kindly set the {2} field as {3} in one of the {4} record."
+		).format(
+			frappe.bold(doc.role),
+			frappe.bold(user),
+			frappe.bold(label),
+			frappe.bold(user),
+			frappe.bold(doc.apply_user_permission_on),
 		)
+	)
 
-		return False
+	return False
 
 
 def apply_permissions_for_non_standard_user_type(doc, method=None):
@@ -313,14 +307,14 @@ def apply_permissions_for_non_standard_user_type(doc, method=None):
 			)
 		):
 
-			perm_data = frappe.db.get_value(
-				"User Permission", {"allow": doc.doctype, "for_value": doc.name}, ["name", "user"]
-			)
-
-			if not perm_data:
+			if perm_data := frappe.db.get_value(
+				"User Permission",
+				{"allow": doc.doctype, "for_value": doc.name},
+				["name", "user"],
+			):
+				frappe.db.set_value("User Permission", perm_data[0], "user", doc.get(data[1]))
+			else:
 				user_doc = frappe.get_cached_doc("User", doc.get(data[1]))
 				user_doc.set_roles_and_modules_based_on_user_type()
 				user_doc.update_children()
 				add_user_permission(doc.doctype, doc.name, doc.get(data[1]))
-			else:
-				frappe.db.set_value("User Permission", perm_data[0], "user", doc.get(data[1]))

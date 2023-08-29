@@ -3,7 +3,7 @@ from frappe.utils import get_fullname
 
 
 def get_leaderboards():
-	leaderboards = {
+	return {
 		"User": {
 			"fields": ["points"],
 			"method": "frappe.desk.leaderboard.get_energy_point_leaderboard",
@@ -11,7 +11,6 @@ def get_leaderboards():
 			"icon": "users",
 		}
 	}
-	return leaderboards
 
 
 @frappe.whitelist()
@@ -47,8 +46,8 @@ def get_energy_point_leaderboard(date_range, company=None, field=None, limit=Non
 	for user in energy_point_users:
 		user_id = user["name"]
 		user["name"] = get_fullname(user["name"])
-		user["formatted_name"] = '<a href="/app/user-profile/{}">{}</a>'.format(
-			user_id, get_fullname(user_id)
-		)
+		user[
+			"formatted_name"
+		] = f'<a href="/app/user-profile/{user_id}">{get_fullname(user_id)}</a>'
 
 	return energy_point_users

@@ -44,13 +44,11 @@ def create_sequence(
 	elif db.db_type == "mariadb":
 		query += " nocache"
 
-	if not cycle:
-		# in postgres, default is no cycle
-		if db.db_type == "mariadb":
-			query += " nocycle"
-	else:
+	if cycle:
 		query += " cycle"
 
+	elif db.db_type == "mariadb":
+		query += " nocycle"
 	db.sql_ddl(query)
 
 	return sequence_name

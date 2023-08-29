@@ -215,7 +215,7 @@ def make_form_dict(request):
 		args = json.loads(request_data)
 	else:
 		args = {}
-		args.update(request.args or {})
+		args |= (request.args or {})
 		args.update(request.form or {})
 
 	if not isinstance(args, dict):
@@ -291,7 +291,7 @@ def handle_exception(e):
 		response = frappe.rate_limiter.respond()
 
 	else:
-		traceback = "<pre>" + sanitize_html(frappe.get_traceback()) + "</pre>"
+		traceback = f"<pre>{sanitize_html(frappe.get_traceback())}</pre>"
 		# disable traceback in production if flag is set
 		if frappe.local.flags.disable_traceback and not frappe.local.dev_server:
 			traceback = ""
@@ -320,21 +320,18 @@ def handle_exception(e):
 
 def after_request(rollback):
 	# if HTTP method would change server state, commit if necessary
-	if (
-		frappe.db
-		and (frappe.local.flags.commit or frappe.local.request.method in UNSAFE_HTTP_METHODS)
-		and frappe.db.transaction_writes
-	):
-		frappe.db.commit()
+	if frappe.db:
+		if (
+			frappe.local.flags.commit
+			or frappe.local.request.method in UNSAFE_HTTP_METHODS
+		) and frappe.db.transaction_writes:
+			frappe.db.commit()
+		else:
+			frappe.db.rollback()
 		rollback = False
-	elif frappe.db:
-		frappe.db.rollback()
-		rollback = False
-
 	# update session
 	if getattr(frappe.local, "session_obj", None):
-		updated_in_db = frappe.local.session_obj.update()
-		if updated_in_db:
+		if updated_in_db := frappe.local.session_obj.update():
 			frappe.db.commit()
 			rollback = False
 

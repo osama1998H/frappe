@@ -230,7 +230,7 @@ def run_tests_for_doctype(
 
 		test_module = get_module_name(doctype, module, "test_")
 		if force:
-			for name in frappe.db.sql_list("select name from `tab%s`" % doctype):
+			for name in frappe.db.sql_list(f"select name from `tab{doctype}`"):
 				frappe.delete_doc(doctype, name, force=True)
 		make_test_records(doctype, verbose=verbose, force=force, commit=True)
 		modules.append(importlib.import_module(test_module))
@@ -338,7 +338,7 @@ def _add_test(app, path, filename, verbose, test_suite=None, ui_tests=False):
 		for doctype in module.test_dependencies:
 			make_test_records(doctype, verbose=verbose, commit=True)
 
-	is_ui_test = True if hasattr(module, "TestDriver") else False
+	is_ui_test = bool(hasattr(module, "TestDriver"))
 
 	if is_ui_test != ui_tests:
 		return
@@ -418,7 +418,7 @@ def make_test_records_for_doctype(doctype, verbose=0, force=False, commit=False)
 	module, test_module = get_modules(doctype)
 
 	if verbose:
-		print("Making for " + doctype)
+		print(f"Making for {doctype}")
 
 	if hasattr(test_module, "_make_test_records"):
 		frappe.local.test_objects[doctype] += test_module._make_test_records(verbose)
@@ -433,15 +433,13 @@ def make_test_records_for_doctype(doctype, verbose=0, force=False, commit=False)
 				doctype, test_module.test_records, verbose, force, commit=commit
 			)
 
-	else:
-		test_records = frappe.get_test_records(doctype)
-		if test_records:
-			frappe.local.test_objects[doctype] += make_test_objects(
-				doctype, test_records, verbose, force, commit=commit
-			)
+	elif test_records := frappe.get_test_records(doctype):
+		frappe.local.test_objects[doctype] += make_test_objects(
+			doctype, test_records, verbose, force, commit=commit
+		)
 
-		elif verbose:
-			print_mandatory_fields(doctype)
+	elif verbose:
+		print_mandatory_fields(doctype)
 
 	add_to_test_record_log(doctype)
 
@@ -465,7 +463,7 @@ def make_test_objects(doctype, test_records=None, verbose=None, reset=False, com
 
 		if d.meta.get_field("naming_series"):
 			if not d.naming_series:
-				d.naming_series = "_T-" + d.doctype + "-"
+				d.naming_series = f"_T-{d.doctype}-"
 
 		if doc.get("name"):
 			d.name = doc.get("name")
@@ -509,13 +507,13 @@ def make_test_objects(doctype, test_records=None, verbose=None, reset=False, com
 
 
 def print_mandatory_fields(doctype):
-	print("Please setup make_test_records for: " + doctype)
+	print(f"Please setup make_test_records for: {doctype}")
 	print("-" * 60)
 	meta = frappe.get_meta(doctype)
 	print("Autoname: " + (meta.autoname or ""))
 	print("Mandatory Fields: ")
 	for d in meta.get("fields", {"reqd": 1}):
-		print(d.parent + ":" + d.fieldname + " | " + d.fieldtype + " | " + (d.options or ""))
+		print(f"{d.parent}:{d.fieldname} | {d.fieldtype} | " + (d.options or ""))
 	print()
 
 

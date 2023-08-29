@@ -58,11 +58,11 @@ class TestNewsletterMixin:
 		if not frappe.db.exists("Email Group", "_Test Email Group"):
 			frappe.get_doc({"doctype": "Email Group", "title": "_Test Email Group"}).insert()
 
+		doctype = "Email Group Member"
+		savepoint = "setup_email_group"
 		for email in emails:
-			doctype = "Email Group Member"
 			email_filters = {"email": email, "email_group": "_Test Email Group"}
 
-			savepoint = "setup_email_group"
 			frappe.db.savepoint(savepoint)
 
 			try:

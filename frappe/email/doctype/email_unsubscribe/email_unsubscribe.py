@@ -8,7 +8,9 @@ from frappe.model.document import Document
 
 class EmailUnsubscribe(Document):
 	def validate(self):
-		if not self.global_unsubscribe and not (self.reference_doctype and self.reference_name):
+		if not self.global_unsubscribe and (
+			not self.reference_doctype or not self.reference_name
+		):
 			frappe.throw(_("Reference DocType and Reference Name are required"), frappe.MandatoryError)
 
 		if not self.global_unsubscribe and frappe.db.get_value(
@@ -23,8 +25,7 @@ class EmailUnsubscribe(Document):
 			):
 				frappe.throw(_("{0} already unsubscribed").format(self.email), frappe.DuplicateEntryError)
 
-		else:
-			if frappe.get_all(
+		elif frappe.get_all(
 				"Email Unsubscribe",
 				filters={
 					"email": self.email,
@@ -33,12 +34,12 @@ class EmailUnsubscribe(Document):
 					"name": ["!=", self.name],
 				},
 			):
-				frappe.throw(
-					_("{0} already unsubscribed for {1} {2}").format(
-						self.email, self.reference_doctype, self.reference_name
-					),
-					frappe.DuplicateEntryError,
-				)
+			frappe.throw(
+				_("{0} already unsubscribed for {1} {2}").format(
+					self.email, self.reference_doctype, self.reference_name
+				),
+				frappe.DuplicateEntryError,
+			)
 
 	def on_update(self):
 		if self.reference_doctype and self.reference_name:

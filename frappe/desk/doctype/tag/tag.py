@@ -79,7 +79,7 @@ class DocTags:
 	def add(self, dn, tag):
 		"""add a new user tag"""
 		tl = self.get_tags(dn).split(",")
-		if not tag in tl:
+		if tag not in tl:
 			tl.append(tag)
 			if not frappe.db.exists("Tag", tag):
 				frappe.get_doc({"doctype": "Tag", "name": tag}).insert(ignore_permissions=True)
@@ -104,7 +104,7 @@ class DocTags:
 			tags = "," + ",".join(tl)
 		try:
 			frappe.db.sql(
-				"update `tab{}` set _user_tags={} where name={}".format(self.dt, "%s", "%s"), (tags, dn)
+				f"update `tab{self.dt}` set _user_tags=%s where name=%s", (tags, dn)
 			)
 			doc = frappe.get_doc(self.dt, dn)
 			update_tags(doc, tags)
@@ -178,16 +178,18 @@ def get_documents_for_tag(tag):
 	"""
 	# remove hastag `#` from tag
 	tag = tag[1:]
-	results = []
-
 	result = frappe.get_list(
 		"Tag Link", filters={"tag": tag}, fields=["document_type", "document_name", "title", "tag"]
 	)
 
-	for res in result:
-		results.append({"doctype": res.document_type, "name": res.document_name, "content": res.title})
-
-	return results
+	return [
+		{
+			"doctype": res.document_type,
+			"name": res.document_name,
+			"content": res.title,
+		}
+		for res in result
+	]
 
 
 @frappe.whitelist()

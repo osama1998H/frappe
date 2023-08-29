@@ -18,7 +18,7 @@ class Contact(Document):
 
 		# concat party name if reqd
 		for link in self.links:
-			self.name = self.name + "-" + link.link_name.strip()
+			self.name = f"{self.name}-{link.link_name.strip()}"
 			break
 
 	def validate(self):
@@ -45,11 +45,14 @@ class Contact(Document):
 
 	def get_link_for(self, link_doctype):
 		"""Return the link name, if exists for the given link DocType"""
-		for link in self.links:
-			if link.link_doctype == link_doctype:
-				return link.link_name
-
-		return None
+		return next(
+			(
+				link.link_name
+				for link in self.links
+				if link.link_doctype == link_doctype
+			),
+			None,
+		)
 
 	def has_link(self, doctype, name):
 		for link in self.links:
@@ -107,7 +110,7 @@ class Contact(Document):
 			setattr(self, fieldname, "")
 			return
 
-		field_name = "is_primary_" + fieldname
+		field_name = f"is_primary_{fieldname}"
 
 		is_primary = [phone.phone for phone in self.phone_nos if phone.get(field_name)]
 
@@ -132,8 +135,9 @@ class Contact(Document):
 
 def get_default_contact(doctype, name):
 	"""Returns default contact for the given doctype, name"""
-	out = frappe.db.sql(
-		"""select parent,
+	if not (
+		out := frappe.db.sql(
+			"""select parent,
 			IFNULL((select is_primary_contact from tabContact c where c.name = dl.parent), 0)
 				as is_primary_contact
 		from
@@ -142,17 +146,15 @@ def get_default_contact(doctype, name):
 			dl.link_doctype=%s and
 			dl.link_name=%s and
 			dl.parenttype = 'Contact' """,
-		(doctype, name),
-		as_dict=True,
-	)
-
-	if out:
-		for contact in out:
-			if contact.is_primary_contact:
-				return contact.parent
-		return out[0].parent
-	else:
+			(doctype, name),
+			as_dict=True,
+		)
+	):
 		return None
+	for contact in out:
+		if contact.is_primary_contact:
+			return contact.parent
+	return out[0].parent
 
 
 @frappe.whitelist()
@@ -180,10 +182,17 @@ def invite_user(contact):
 @frappe.whitelist()
 def get_contact_details(contact):
 	contact = frappe.get_doc("Contact", contact)
-	out = {
+	return {
 		"contact_person": contact.get("name"),
 		"contact_display": " ".join(
-			filter(None, [contact.get("salutation"), contact.get("first_name"), contact.get("last_name")])
+			filter(
+				None,
+				[
+					contact.get("salutation"),
+					contact.get("first_name"),
+					contact.get("last_name"),
+				],
+			)
 		),
 		"contact_email": contact.get("email_id"),
 		"contact_mobile": contact.get("mobile_no"),
@@ -191,13 +200,11 @@ def get_contact_details(contact):
 		"contact_designation": contact.get("designation"),
 		"contact_department": contact.get("department"),
 	}
-	return out
 
 
 def update_contact(doc, method):
 	"""Update contact when user is updated, if contact is found. Called via hooks"""
-	contact_name = frappe.db.get_value("Contact", {"email_id": doc.name})
-	if contact_name:
+	if contact_name := frappe.db.get_value("Contact", {"email_id": doc.name}):
 		contact = frappe.get_doc("Contact", contact_name)
 		for key in ("first_name", "last_name", "phone"):
 			if doc.get(key):
@@ -240,7 +247,7 @@ def contact_query(doctype, txt, searchfield, start, page_len, filters):
 			mcond=get_match_cond(doctype), key=searchfield
 		),
 		{
-			"txt": "%" + txt + "%",
+			"txt": f"%{txt}%",
 			"_txt": txt.replace("%", ""),
 			"start": start,
 			"page_len": page_len,
@@ -319,15 +326,22 @@ def get_contacts_linking_to(doctype, docname, fields=None):
 
 def get_contacts_linked_from(doctype, docname, fields=None):
 	"""Return a list of contacts that are contained in (linked from) the given document."""
-	link_fields = frappe.get_meta(doctype).get("fields", {"fieldtype": "Link", "options": "Contact"})
-	if not link_fields:
+	if link_fields := frappe.get_meta(doctype).get(
+		"fields", {"fieldtype": "Link", "options": "Contact"}
+	):
+		return (
+			frappe.get_list(
+				"Contact", fields=fields, filters={"name": ("in", contact_names)}
+			)
+			if (
+				contact_names := frappe.get_value(
+					doctype, docname, fieldname=[f.fieldname for f in link_fields]
+				)
+			)
+			else []
+		)
+	else:
 		return []
-
-	contact_names = frappe.get_value(doctype, docname, fieldname=[f.fieldname for f in link_fields])
-	if not contact_names:
-		return []
-
-	return frappe.get_list("Contact", fields=fields, filters={"name": ("in", contact_names)})
 
 
 def get_full_name(

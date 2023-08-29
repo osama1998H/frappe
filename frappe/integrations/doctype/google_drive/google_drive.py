@@ -155,13 +155,9 @@ def upload_system_backup_to_google_drive():
 	if frappe.flags.create_new_backup:
 		set_progress(1, "Backing up Data.")
 		backup = new_backup()
-		file_urls = []
-		file_urls.append(backup.backup_path_db)
-		file_urls.append(backup.backup_path_conf)
-
+		file_urls = [backup.backup_path_db, backup.backup_path_conf]
 		if account.file_backup:
-			file_urls.append(backup.backup_path_files)
-			file_urls.append(backup.backup_path_private_files)
+			file_urls.extend((backup.backup_path_files, backup.backup_path_private_files))
 	else:
 		file_urls = get_latest_backup_file(with_files=account.file_backup)
 

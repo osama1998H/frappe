@@ -153,7 +153,7 @@ class Engine:
 			_field = self.get_function_object(field)
 		elif not doctype or doctype == self.doctype:
 			_field = self.table[field]
-		elif doctype:
+		else:
 			_field = frappe.qb.DocType(doctype)[field]
 
 		# apply implicit join if child table is referenced
@@ -275,9 +275,7 @@ class Engine:
 			if alias:
 				return PseudoColumnMapper(f"{field} {alias}")
 			return PseudoColumnMapper(field)
-		if alias:
-			return self.table[field].as_(alias)
-		return self.table[field]
+		return self.table[field].as_(alias) if alias else self.table[field]
 
 	def parse_fields(self, fields: str | list | tuple | None) -> list:
 		if not fields:
@@ -378,23 +376,24 @@ class DynamicTableField:
 
 	@staticmethod
 	def parse(field: str, doctype: str):
-		if "." in field:
-			alias = None
-			if " as " in field:
-				field, alias = field.split(" as ")
-			if field.startswith("`tab") or field.startswith('"tab'):
-				_, child_doctype, child_field = re.search(r'([`"])tab(.+?)\1.\1(.+)\1', field).groups()
-				if child_doctype == doctype:
-					return
-				return ChildTableField(child_doctype, child_field, doctype, alias=alias)
-			else:
-				linked_fieldname, fieldname = field.split(".")
-				linked_field = frappe.get_meta(doctype).get_field(linked_fieldname)
-				linked_doctype = linked_field.options
-				if linked_field.fieldtype == "Link":
-					return LinkTableField(linked_doctype, fieldname, doctype, linked_fieldname, alias=alias)
-				elif linked_field.fieldtype in frappe.model.table_fields:
-					return ChildTableField(linked_doctype, fieldname, doctype, alias=alias)
+		if "." not in field:
+			return
+		alias = None
+		if " as " in field:
+			field, alias = field.split(" as ")
+		if field.startswith("`tab") or field.startswith('"tab'):
+			_, child_doctype, child_field = re.search(r'([`"])tab(.+?)\1.\1(.+)\1', field).groups()
+			if child_doctype == doctype:
+				return
+			return ChildTableField(child_doctype, child_field, doctype, alias=alias)
+		else:
+			linked_fieldname, fieldname = field.split(".")
+			linked_field = frappe.get_meta(doctype).get_field(linked_fieldname)
+			linked_doctype = linked_field.options
+			if linked_field.fieldtype == "Link":
+				return LinkTableField(linked_doctype, fieldname, doctype, linked_fieldname, alias=alias)
+			elif linked_field.fieldtype in frappe.model.table_fields:
+				return ChildTableField(linked_doctype, fieldname, doctype, alias=alias)
 
 	def apply_select(self, query: QueryBuilder) -> QueryBuilder:
 		raise NotImplementedError
@@ -467,7 +466,7 @@ def literal_eval_(literal):
 def has_function(field):
 	_field = field.casefold() if (isinstance(field, str) and "`" not in field) else field
 	if not issubclass(type(_field), Criterion):
-		if any([f"{func}(" in _field for func in SQL_FUNCTIONS]):
+		if any(f"{func}(" in _field for func in SQL_FUNCTIONS):
 			return True
 
 
@@ -478,8 +477,8 @@ def get_nested_set_hierarchy_result(doctype: str, name: str, hierarchy: str):
 	except IndexError:
 		lft, rgt = None, None
 
-	if hierarchy in ("descendants of", "not descendants of"):
-		result = (
+	return (
+		(
 			frappe.qb.from_(table)
 			.select(table.name)
 			.where(table.lft > lft)
@@ -487,9 +486,8 @@ def get_nested_set_hierarchy_result(doctype: str, name: str, hierarchy: str):
 			.orderby(table.lft, order=Order.asc)
 			.run()
 		)
-	else:
-		# Get ancestor elements of a DocType with a tree structure
-		result = (
+		if hierarchy in {"descendants of", "not descendants of"}
+		else (
 			frappe.qb.from_(table)
 			.select(table.name)
 			.where(table.lft < lft)
@@ -497,4 +495,4 @@ def get_nested_set_hierarchy_result(doctype: str, name: str, hierarchy: str):
 			.orderby(table.lft, order=Order.desc)
 			.run()
 		)
-	return result
+	)

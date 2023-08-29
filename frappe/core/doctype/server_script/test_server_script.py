@@ -119,7 +119,9 @@ class TestServerScript(FrappeTestCase):
 		)
 
 	def test_api(self):
-		response = requests.post(get_site_url(frappe.local.site) + "/api/method/test_server_script")
+		response = requests.post(
+			f"{get_site_url(frappe.local.site)}/api/method/test_server_script"
+		)
 		self.assertEqual(response.status_code, 200)
 		self.assertEqual("hello", response.json()["message"])
 
@@ -219,7 +221,7 @@ frappe.qb.from_(todo).select(todo.name).where(todo.name == "{todo.name}").run()
 			name="test_nested_scripts_1",
 			script_type="API",
 			api_method="test_nested_scripts_1",
-			script=f"""log("nothing")""",
+			script="""log("nothing")""",
 		)
 		script.insert()
 		script.execute_method()
@@ -229,7 +231,7 @@ frappe.qb.from_(todo).select(todo.name).where(todo.name == "{todo.name}").run()
 			name="test_nested_scripts_2",
 			script_type="API",
 			api_method="test_nested_scripts_2",
-			script=f"""frappe.call("test_nested_scripts_1")""",
+			script="""frappe.call("test_nested_scripts_1")""",
 		)
 		script.insert()
 		script.execute_method()

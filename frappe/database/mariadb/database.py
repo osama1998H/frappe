@@ -107,7 +107,7 @@ class MariaDBConnectionUtil:
 		return pymysql.connect(**self.get_connection_settings())
 
 	def set_execution_timeout(self, seconds: int):
-		self.sql("set session max_statement_time = %s", int(seconds))
+		self.sql("set session max_statement_time = %s", seconds)
 
 	def get_connection_settings(self) -> dict:
 		conn_settings = {
@@ -222,7 +222,7 @@ class MariaDBDatabase(MariaDBConnectionUtil, MariaDBExceptionUtil, Database):
 		if percent:
 			s = s.replace("%", "%%")
 
-		return "'" + s + "'"
+		return f"'{s}'"
 
 	# column type
 	@staticmethod
@@ -262,7 +262,7 @@ class MariaDBDatabase(MariaDBConnectionUtil, MariaDBExceptionUtil, Database):
 		)
 
 	def create_global_search_table(self):
-		if not "__global_search" in self.get_tables():
+		if "__global_search" not in self.get_tables():
 			self.sql(
 				"""create table __global_search(
 				doctype varchar(100),
@@ -379,7 +379,7 @@ class MariaDBDatabase(MariaDBConnectionUtil, MariaDBExceptionUtil, Database):
 		if not self.sql(
 			"""select CONSTRAINT_NAME from information_schema.TABLE_CONSTRAINTS
 			where table_name=%s and constraint_type='UNIQUE' and CONSTRAINT_NAME=%s""",
-			("tab" + doctype, constraint_name),
+			(f"tab{doctype}", constraint_name),
 		):
 			self.commit()
 			self.sql(

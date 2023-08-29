@@ -226,9 +226,7 @@ def ready_for_migration(context, site=None):
 
 	try:
 		frappe.init(site=site)
-		pending_jobs = get_pending_jobs(site=site)
-
-		if pending_jobs:
+		if pending_jobs := get_pending_jobs(site=site):
 			print(f"NOT READY for migration: site {site} has pending background jobs")
 			sys.exit(1)
 

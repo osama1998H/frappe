@@ -163,24 +163,21 @@ def queue_submission(doc: Document, action: str, alert: bool = True):
 
 @frappe.whitelist()
 def get_latest_submissions(doctype, docname):
-	# NOTE: not used creation as orderby intentianlly as we have used update_modified=False everywhere
-	# hence assuming modified will be equal to creation for submission queue documents
-
-	latest_submission = frappe.db.get_value(
-		"Submission Queue",
-		filters={"ref_doctype": doctype, "ref_docname": docname},
-		fieldname=["name", "exception", "status"],
-	)
-
-	out = None
-	if latest_submission:
-		out = {
+	return (
+		{
 			"latest_submission": latest_submission[0],
 			"exc": format_tb(latest_submission[1]),
 			"status": latest_submission[2],
 		}
-
-	return out
+		if (
+			latest_submission := frappe.db.get_value(
+				"Submission Queue",
+				filters={"ref_doctype": doctype, "ref_docname": docname},
+				fieldname=["name", "exception", "status"],
+			)
+		)
+		else None
+	)
 
 
 def format_tb(traceback: str | None = None):

@@ -30,9 +30,7 @@ def get_things_todo(as_list=False):
 		as_list=True,
 	)
 
-	if as_list:
-		return data
-	return data[0][0]
+	return data if as_list else data[0][0]
 
 
 def get_todays_events(as_list: bool = False):

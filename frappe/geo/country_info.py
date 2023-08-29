@@ -46,19 +46,18 @@ def get_translated_dict():
 
 	# timezones
 	for tz in get_all_timezones():
-		timezone_name = get_timezone_name(get_timezone(tz), locale=locale, width="short")
-		if timezone_name:
-			translated_dict[tz] = timezone_name + " - " + tz
+		if timezone_name := get_timezone_name(
+			get_timezone(tz), locale=locale, width="short"
+		):
+			translated_dict[tz] = f"{timezone_name} - {tz}"
 
 	# country names && currencies
 	for country, info in get_all().items():
-		country_name = locale.territories.get((info.get("code") or "").upper())
-		if country_name:
+		if country_name := locale.territories.get((info.get("code") or "").upper()):
 			translated_dict[country] = country_name
 
 		currency = info.get("currency")
-		currency_name = locale.currencies.get(currency)
-		if currency_name:
+		if currency_name := locale.currencies.get(currency):
 			translated_dict[currency] = currency_name
 
 	return translated_dict

@@ -12,8 +12,7 @@ import frappe
 
 from .test_runner import SLOW_TEST_THRESHOLD, make_test_records, set_test_email_config
 
-click_ctx = click.get_current_context(True)
-if click_ctx:
+if click_ctx := click.get_current_context(True):
 	click_ctx.color = True
 
 
@@ -230,10 +229,13 @@ def get_all_tests(app):
 			# in /doctype/doctype/boilerplate/
 			continue
 
-		for filename in files:
-			if filename.startswith("test_") and filename.endswith(".py") and filename != "test_runner.py":
-				test_file_list.append([path, filename])
-
+		test_file_list.extend(
+			[path, filename]
+			for filename in files
+			if filename.startswith("test_")
+			and filename.endswith(".py")
+			and filename != "test_runner.py"
+		)
 	return test_file_list
 
 
@@ -301,8 +303,8 @@ class ParallelTestWithOrchestrator(ParallelTestRunner):
 		url = f"{self.orchestrator_url}/{endpoint}"
 		res = requests.get(url, json=data, headers=headers)
 		res.raise_for_status()
-		response_data = {}
-		if "application/json" in res.headers.get("content-type"):
-			response_data = res.json()
-
-		return response_data
+		return (
+			res.json()
+			if "application/json" in res.headers.get("content-type")
+			else {}
+		)

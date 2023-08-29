@@ -14,16 +14,12 @@ class NotificationSettings(Document):
 
 def is_notifications_enabled(user):
 	enabled = frappe.db.get_value("Notification Settings", user, "enabled")
-	if enabled is None:
-		return True
-	return enabled
+	return True if enabled is None else enabled
 
 
 def is_email_notifications_enabled(user):
 	enabled = frappe.db.get_value("Notification Settings", user, "enable_email_notifications")
-	if enabled is None:
-		return True
-	return enabled
+	return True if enabled is None else enabled
 
 
 def is_email_notifications_enabled_for_type(user, notification_type):
@@ -33,11 +29,9 @@ def is_email_notifications_enabled_for_type(user, notification_type):
 	if notification_type == "Alert":
 		return False
 
-	fieldname = "enable_email_" + frappe.scrub(notification_type)
+	fieldname = f"enable_email_{frappe.scrub(notification_type)}"
 	enabled = frappe.db.get_value("Notification Settings", user, fieldname)
-	if enabled is None:
-		return True
-	return enabled
+	return True if enabled is None else enabled
 
 
 def create_notification_settings(user):

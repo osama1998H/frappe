@@ -28,8 +28,7 @@ def get_report_doc(report_name):
 		doc = frappe.get_doc("Report", reference_report)
 		doc.custom_report = report_name
 		if custom_report_doc.json:
-			data = json.loads(custom_report_doc.json)
-			if data:
+			if data := json.loads(custom_report_doc.json):
 				doc.custom_columns = data["columns"]
 		doc.is_custom_report = True
 
@@ -95,12 +94,11 @@ def generate_report_result(
 		for custom_column in custom_columns:
 			columns.insert(custom_column["insert_after_index"] + 1, custom_column)
 
-	# all columns which are not in original report
-	report_custom_columns = [
-		column for column in columns if column["fieldname"] not in report_column_names
-	]
-
-	if report_custom_columns:
+	if report_custom_columns := [
+		column
+		for column in columns
+		if column["fieldname"] not in report_column_names
+	]:
 		result = add_custom_column_data(report_custom_columns, result)
 
 	if result:
@@ -127,9 +125,9 @@ def normalize_result(result, columns):
 	column_names = [column["fieldname"] for column in columns]
 	if result and isinstance(result[0], (list, tuple)):
 		for row in result:
-			row_obj = {}
-			for idx, column_name in enumerate(column_names):
-				row_obj[column_name] = row[idx]
+			row_obj = {
+				column_name: row[idx] for idx, column_name in enumerate(column_names)
+			}
 			data.append(row_obj)
 	else:
 		data = result
@@ -147,8 +145,12 @@ def get_script(report_name):
 	# custom modules are virtual modules those exists in DB but not in disk.
 	module_path = "" if is_custom_module else get_module_path(module)
 	report_folder = module_path and os.path.join(module_path, "report", scrub(report.name))
-	script_path = report_folder and os.path.join(report_folder, scrub(report.name) + ".js")
-	print_path = report_folder and os.path.join(report_folder, scrub(report.name) + ".html")
+	script_path = report_folder and os.path.join(
+		report_folder, f"{scrub(report.name)}.js"
+	)
+	print_path = report_folder and os.path.join(
+		report_folder, f"{scrub(report.name)}.html"
+	)
 
 	script = None
 	if os.path.exists(script_path):
@@ -219,11 +221,8 @@ def add_custom_column_data(custom_columns, result):
 		key = (column.get("doctype"), column.get("fieldname"))
 		if key in custom_column_data:
 			for row in result:
-				row_reference = row.get(column.get("link_field"))
-				# possible if the row is empty
-				if not row_reference:
-					continue
-				row[column.get("fieldname")] = custom_column_data.get(key).get(row_reference)
+				if row_reference := row.get(column.get("link_field")):
+					row[column.get("fieldname")] = custom_column_data.get(key).get(row_reference)
 
 	return result
 
@@ -383,9 +382,7 @@ def add_total_row(result, columns, meta=None, is_tree=False, parent_field=None):
 		fieldtype, options, fieldname = None, None, None
 		if isinstance(col, str):
 			if meta:
-				# get fieldtype from the meta
-				field = meta.get_field(col)
-				if field:
+				if field := meta.get_field(col):
 					fieldtype = meta.get_field(col).fieldtype
 					fieldname = meta.get_field(col).fieldname
 			else:
@@ -445,9 +442,7 @@ def get_data_for_custom_field(doctype, field):
 	if not frappe.has_permission(doctype, "read"):
 		frappe.throw(_("Not Permitted"), frappe.PermissionError)
 
-	value_map = frappe._dict(frappe.get_all(doctype, fields=["name", field], as_list=1))
-
-	return value_map
+	return frappe._dict(frappe.get_all(doctype, fields=["name", field], as_list=1))
 
 
 def get_data_for_custom_report(columns):
@@ -466,16 +461,14 @@ def get_data_for_custom_report(columns):
 def save_report(reference_report, report_name, columns):
 	report_doc = get_report_doc(reference_report)
 
-	docname = frappe.db.exists(
+	if docname := frappe.db.exists(
 		"Report",
 		{
 			"report_name": report_name,
 			"is_standard": "No",
 			"report_type": "Custom Report",
 		},
-	)
-
-	if docname:
+	):
 		report = frappe.get_doc("Report", docname)
 		existing_jd = json.loads(report.json)
 		existing_jd["columns"] = json.loads(columns)
@@ -686,8 +679,9 @@ def get_user_match_filters(doctypes, user):
 	match_filters = {}
 
 	for dt in doctypes:
-		filter_list = frappe.desk.reportview.build_match_conditions(dt, user, False)
-		if filter_list:
+		if filter_list := frappe.desk.reportview.build_match_conditions(
+			dt, user, False
+		):
 			match_filters[dt] = filter_list
 
 	return match_filters

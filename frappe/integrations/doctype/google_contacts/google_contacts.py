@@ -78,7 +78,7 @@ def sync(g_contact=None):
 	filters = {"enable": 1}
 
 	if g_contact:
-		filters.update({"name": g_contact})
+		filters["name"] = g_contact
 
 	google_contacts = frappe.get_list("Google Contacts", filters=filters)
 
@@ -125,9 +125,7 @@ def sync_contacts_from_google_contacts(g_contact):
 				).format(account.name, err.resp.status)
 			)
 
-		for contact in contacts.get("connections", []):
-			results.append(contact)
-
+		results.extend(iter(contacts.get("connections", [])))
 		if not contacts.get("nextPageToken"):
 			if contacts.get("nextSyncToken"):
 				frappe.db.set_value(
@@ -231,7 +229,7 @@ def update_contacts_to_google_contacts(doc, method=None):
 	):
 		return
 
-	if doc.sync_with_google_contacts and not doc.google_contacts_id:
+	if not doc.google_contacts_id:
 		# If sync_with_google_contacts is checked later, then insert the contact rather than updating it.
 		insert_contacts_to_google_contacts(doc)
 		return

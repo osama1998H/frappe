@@ -47,7 +47,6 @@ def download_file(url, prefix):
 def build_missing_files():
 	"""Check which files dont exist yet from the assets.json and run build for those files"""
 
-	missing_assets = []
 	current_asset_files = []
 
 	for type in ["css", "js"]:
@@ -57,10 +56,10 @@ def build_missing_files():
 	development = frappe.local.conf.developer_mode or frappe.local.dev_server
 	build_mode = "development" if development else "production"
 
-	assets_json = frappe.read_file("assets/assets.json")
-	if assets_json:
+	if assets_json := frappe.read_file("assets/assets.json"):
 		assets_json = frappe.parse_json(assets_json)
 
+		missing_assets = []
 		for bundle_file, output_file in assets_json.items():
 			if not output_file.startswith("/assets/frappe"):
 				continue
@@ -70,7 +69,7 @@ def build_missing_files():
 
 		if missing_assets:
 			click.secho("\nBuilding missing assets...\n", fg="yellow")
-			files_to_build = ["frappe/" + name for name in missing_assets]
+			files_to_build = [f"frappe/{name}" for name in missing_assets]
 			bundle(build_mode, files=files_to_build)
 	else:
 		# no assets.json, run full build
@@ -264,9 +263,9 @@ def watch(apps=None):
 	if apps:
 		command += f" --apps {apps}"
 
-	live_reload = frappe.utils.cint(os.environ.get("LIVE_RELOAD", frappe.conf.live_reload))
-
-	if live_reload:
+	if live_reload := frappe.utils.cint(
+		os.environ.get("LIVE_RELOAD", frappe.conf.live_reload)
+	):
 		command += " --live-reload"
 
 	check_node_executable()
@@ -285,8 +284,9 @@ def check_node_executable():
 
 
 def get_node_env():
-	node_env = {"NODE_OPTIONS": f"--max_old_space_size={get_safe_max_old_space_size()}"}
-	return node_env
+	return {
+		"NODE_OPTIONS": f"--max_old_space_size={get_safe_max_old_space_size()}"
+	}
 
 
 def get_safe_max_old_space_size():
@@ -334,7 +334,7 @@ def generate_assets_map():
 			app_doc_path = os.path.join(app_base_path, "www", "docs")
 		if app_doc_path:
 			app_docs = os.path.abspath(app_doc_path)
-			symlinks[app_docs] = os.path.join(assets_path, app_name + "_docs")
+			symlinks[app_docs] = os.path.join(assets_path, f"{app_name}_docs")
 
 	return symlinks
 
@@ -359,11 +359,7 @@ def unstrip(message: str) -> str:
 	except Exception:
 		max_str = 80
 
-	if _len < max_str:
-		_rem = max_str - _len
-	else:
-		_rem = max_str % _len
-
+	_rem = max_str - _len if _len < max_str else max_str % _len
 	return f"{message}{' ' * _rem}"
 
 

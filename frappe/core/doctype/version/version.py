@@ -11,16 +11,11 @@ from frappe.model.document import Document
 class Version(Document):
 	def update_version_info(self, old: Document | None, new: Document) -> bool:
 		"""Update changed info and return true if change contains useful data."""
-		if not old:
-			# Check if doc has some information about creation source like data import
-			return self.for_insert(new)
-		else:
-			return self.set_diff(old, new)
+		return self.for_insert(new) if not old else self.set_diff(old, new)
 
 	def set_diff(self, old: Document, new: Document) -> bool:
 		"""Set the data property with the diff of the docs if present"""
-		diff = get_diff(old, new)
-		if diff:
+		if diff := get_diff(old, new):
 			self.ref_doctype = new.doctype
 			self.docname = new.name
 			self.data = frappe.as_json(diff, indent=None, separators=(",", ":"))
@@ -105,7 +100,7 @@ def get_diff(old, new, for_child=False):
 
 			# check for deletions
 			for d in old_value:
-				if not d.name in new_row_by_name:
+				if d.name not in new_row_by_name:
 					out.removed.append([df.fieldname, d.as_dict()])
 
 		elif old_value != new_value:

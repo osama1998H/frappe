@@ -247,12 +247,8 @@ class LDAPSettings(Document):
 			ldap_custom_group_search = self.ldap_custom_group_search or "{0}"
 			user_search_str = ldap_custom_group_search.format(getattr(user, self.ldap_username_field).value)
 
-		else:
-			# NOTE: depreciate this else path
-			# this path will be hit for everyone with preconfigured ldap settings. this must be taken into account so as not to break ldap for those users.
-
-			if self.ldap_group_field:
-				fetch_ldap_groups = getattr(user, self.ldap_group_field).values
+		elif self.ldap_group_field:
+			fetch_ldap_groups = getattr(user, self.ldap_group_field).values
 
 		if ldap_object_class is not None:
 			conn.search(
@@ -262,10 +258,7 @@ class LDAPSettings(Document):
 			)  # Build search query
 
 		if len(conn.entries) >= 1:
-			fetch_ldap_groups = []
-			for group in conn.entries:
-				fetch_ldap_groups.append(group["cn"].value)
-
+			fetch_ldap_groups = [group["cn"].value for group in conn.entries]
 		return fetch_ldap_groups
 
 	def authenticate(self, username: str, password: str):

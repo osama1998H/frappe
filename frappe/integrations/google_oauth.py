@@ -104,15 +104,15 @@ class GoogleOAuth:
 		:param state: dict of values which you need on callback (for calling methods, redirection back to the form, doc name, etc)
 		"""
 
-		state.update({"domain": self.domain})
+		state["domain"] = self.domain
 		state = json.dumps(state)
 		callback_url = get_request_site_address(True) + CALLBACK_METHOD
 
 		return {
-			"url": "https://accounts.google.com/o/oauth2/v2/auth?"
-			+ "access_type=offline&response_type=code&prompt=consent&include_granted_scopes=true&"
-			+ "client_id={}&scope={}&redirect_uri={}&state={}".format(
-				self.google_settings.client_id, self.scopes, callback_url, state
+			"url": (
+				"https://accounts.google.com/o/oauth2/v2/auth?"
+				+ "access_type=offline&response_type=code&prompt=consent&include_granted_scopes=true&"
+				+ f"client_id={self.google_settings.client_id}&scope={self.scopes}&redirect_uri={callback_url}&state={state}"
 			)
 		}
 
@@ -162,10 +162,7 @@ def is_valid_access_token(access_token: str) -> bool:
 		"https://oauth2.googleapis.com/tokeninfo", params={"access_token": access_token}
 	).json()
 
-	if "error" in response:
-		return False
-
-	return True
+	return "error" not in response
 
 
 @frappe.whitelist(methods=["GET"])

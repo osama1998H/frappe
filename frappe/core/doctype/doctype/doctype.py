@@ -200,7 +200,7 @@ class DocType(Document):
 		if not [d.fieldname for d in self.fields if d.in_list_view]:
 			cnt = 0
 			for d in self.fields:
-				if d.reqd and not d.hidden and not d.fieldtype in not_allowed_in_list_view:
+				if d.reqd and not d.hidden and d.fieldtype not in not_allowed_in_list_view:
 					d.in_list_view = 1
 					cnt += 1
 					if cnt == 4:
@@ -296,7 +296,7 @@ class DocType(Document):
 
 		if self.has_web_view:
 			# route field must be present
-			if not "route" in [d.fieldname for d in self.fields]:
+			if "route" not in [d.fieldname for d in self.fields]:
 				frappe.throw(_('Field "route" is mandatory for Web Views'), title="Missing Field")
 
 			# clear website cache
@@ -355,24 +355,23 @@ class DocType(Document):
 		)
 		for d in self.get("fields"):
 			if d.fieldtype:
-				if not getattr(d, "fieldname", None):
-					if d.label:
-						d.fieldname = d.label.strip().lower().replace(" ", "_").strip("?")
-						if d.fieldname in restricted:
-							d.fieldname = d.fieldname + "1"
-						if d.fieldtype == "Section Break":
-							d.fieldname = d.fieldname + "_section"
-						elif d.fieldtype == "Column Break":
-							d.fieldname = d.fieldname + "_column"
-						elif d.fieldtype == "Tab Break":
-							d.fieldname = d.fieldname + "_tab"
-					elif d.fieldtype in ("Section Break", "Column Break", "Tab Break"):
-						d.fieldname = d.fieldtype.lower().replace(" ", "_") + "_" + str(random_string(4))
-					else:
-						frappe.throw(_("Row #{}: Fieldname is required").format(d.idx), title="Missing Fieldname")
-				else:
+				if getattr(d, "fieldname", None):
 					if d.fieldname in restricted:
 						frappe.throw(_("Fieldname {0} is restricted").format(d.fieldname), InvalidFieldNameError)
+				elif d.label:
+					d.fieldname = d.label.strip().lower().replace(" ", "_").strip("?")
+					if d.fieldname in restricted:
+						d.fieldname = f"{d.fieldname}1"
+					if d.fieldtype == "Column Break":
+						d.fieldname = f"{d.fieldname}_column"
+					elif d.fieldtype == "Section Break":
+						d.fieldname = f"{d.fieldname}_section"
+					elif d.fieldtype == "Tab Break":
+						d.fieldname = f"{d.fieldname}_tab"
+				elif d.fieldtype in ("Section Break", "Column Break", "Tab Break"):
+					d.fieldname = d.fieldtype.lower().replace(" ", "_") + "_" + str(random_string(4))
+				else:
+					frappe.throw(_("Row #{}: Fieldname is required").format(d.idx), title="Missing Fieldname")
 				d.fieldname = ILLEGAL_FIELDNAME_PATTERN.sub("", d.fieldname)
 
 				# fieldnames should be lowercase
@@ -679,8 +678,9 @@ class DocType(Document):
 			remaining_field_names = [f["fieldname"] for f in docdict.get("fields", [])]
 
 			for fieldname in docdict.get("field_order"):
-				field_dict = [f for f in docdict.get("fields", []) if f["fieldname"] == fieldname]
-				if field_dict:
+				if field_dict := [
+					f for f in docdict.get("fields", []) if f["fieldname"] == fieldname
+				]:
 					new_field_dicts.append(field_dict[0])
 					if fieldname in remaining_field_names:
 						remaining_field_names.remove(fieldname)
@@ -915,13 +915,12 @@ def validate_series(dt, autoname=None, name=None):
 
 		prefix = autoname.split(".", 1)[0]
 		doctype = frappe.qb.DocType("DocType")
-		used_in = (
+		if used_in := (
 			frappe.qb.from_(doctype)
 			.select(doctype.name)
 			.where(doctype.autoname.like(Concat(prefix, ".%")))
 			.where(doctype.name != name)
-		).run()
-		if used_in:
+		).run():
 			frappe.throw(_("Series {0} already used in {1}").format(prefix, used_in[0][0]))
 
 
@@ -1032,7 +1031,7 @@ def _test_connection_query(doctype, field, idx):
 	except Exception as e:
 		frappe.clear_last_message()
 		msg = _("Document Links Row #{0}: Invalid doctype or fieldname.").format(idx)
-		msg += "<br>" + str(e)
+		msg += f"<br>{str(e)}"
 		frappe.throw(msg, InvalidFieldNameError)
 
 
@@ -1109,7 +1108,7 @@ def validate_fields(meta):
 					),
 					DoctypeLinkError,
 				)
-			if d.options == "[Select]" or d.options == d.parent:
+			if d.options in ["[Select]", d.parent]:
 				return
 			if d.options != d.parent:
 				options = frappe.db.get_value("DocType", d.options, "name")
@@ -1120,7 +1119,7 @@ def validate_fields(meta):
 						),
 						WrongOptionsDoctypeLinkError,
 					)
-				elif not (options == d.options):
+				elif options != d.options:
 					frappe.throw(
 						_("{0}: Options {1} must be the same as doctype name {2} for the field {3}").format(
 							docname, d.options, options, d.label
@@ -1368,7 +1367,7 @@ def validate_fields(meta):
 
 	def check_table_multiselect_option(docfield):
 		"""check if the doctype provided in Option has atleast 1 Link field"""
-		if not docfield.fieldtype == "Table MultiSelect":
+		if docfield.fieldtype != "Table MultiSelect":
 			return
 
 		doctype = docfield.options
@@ -1567,21 +1566,22 @@ def validate_permissions(doctype, for_remove=False, alert=False):
 			)
 
 	def check_level_zero_is_set(d):
-		if cint(d.permlevel) > 0 and d.role != "All":
-			has_zero_perm = False
-			for p in permissions:
-				if p.role == d.role and (p.permlevel or 0) == 0 and p != d:
-					has_zero_perm = True
-					break
+		if cint(d.permlevel) <= 0 or d.role == "All":
+			return
+		has_zero_perm = False
+		for p in permissions:
+			if p.role == d.role and (p.permlevel or 0) == 0 and p != d:
+				has_zero_perm = True
+				break
 
-			if not has_zero_perm:
-				frappe.throw(
-					_("{0}: Permission at level 0 must be set before higher levels are set").format(get_txt(d))
-				)
+		if not has_zero_perm:
+			frappe.throw(
+				_("{0}: Permission at level 0 must be set before higher levels are set").format(get_txt(d))
+			)
 
-			for invalid in ("create", "submit", "cancel", "amend"):
-				if d.get(invalid):
-					d.set(invalid, 0)
+		for invalid in ("create", "submit", "cancel", "amend"):
+			if d.get(invalid):
+				d.set(invalid, 0)
 
 	def check_permission_dependency(d):
 		if d.cancel and not d.submit:
@@ -1689,9 +1689,7 @@ def make_module_and_roles(doc, perm_fieldname="permissions"):
 	except frappe.DoesNotExistError as e:
 		pass
 	except frappe.db.ProgrammingError as e:
-		if frappe.db.is_table_missing(e):
-			pass
-		else:
+		if not frappe.db.is_table_missing(e):
 			raise
 
 
@@ -1742,7 +1740,7 @@ def check_email_append_to(doc):
 	if doc.sender_field and not sender_field:
 		frappe.throw(_("Select a valid Sender Field for creating documents from Email"))
 
-	if not sender_field.options == "Email":
+	if sender_field.options != "Email":
 		frappe.throw(_("Sender Field should have Email in options"))
 
 

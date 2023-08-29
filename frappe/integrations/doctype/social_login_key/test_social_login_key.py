@@ -55,10 +55,9 @@ class TestSocialLoginKey(FrappeTestCase):
 
 def make_social_login_key(**kwargs):
 	kwargs["doctype"] = "Social Login Key"
-	if not "provider_name" in kwargs:
+	if "provider_name" not in kwargs:
 		kwargs["provider_name"] = "Test OAuth2 Provider"
-	doc = frappe.get_doc(kwargs)
-	return doc
+	return frappe.get_doc(kwargs)
 
 
 def create_or_update_social_login_key():
@@ -79,16 +78,15 @@ def create_or_update_social_login_key():
 def create_github_social_login_key():
 	if frappe.db.exists("Social Login Key", "github"):
 		return frappe.get_doc("Social Login Key", "github")
-	else:
-		provider_name = "GitHub"
-		social_login_key = make_social_login_key(social_login_provider=provider_name)
-		social_login_key.get_social_login_provider(provider_name, initialize=True)
+	provider_name = "GitHub"
+	social_login_key = make_social_login_key(social_login_provider=provider_name)
+	social_login_key.get_social_login_provider(provider_name, initialize=True)
 
-		# Dummy client_id and client_secret
-		social_login_key.client_id = "h6htd6q"
-		social_login_key.client_secret = "keoererk988ekkhf8w9e8ewrjhhkjer9889"
-		social_login_key.insert(ignore_permissions=True)
-		return social_login_key
+	# Dummy client_id and client_secret
+	social_login_key.client_id = "h6htd6q"
+	social_login_key.client_secret = "keoererk988ekkhf8w9e8ewrjhhkjer9889"
+	social_login_key.insert(ignore_permissions=True)
+	return social_login_key
 
 
 def github_response_for_private_email(url, *args, **kwargs):

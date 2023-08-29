@@ -62,11 +62,8 @@ def get_extension(
 	mimetype = None
 
 	if response:
-		content_type = response.headers.get("Content-Type")
-
-		if content_type:
-			_extn = mimetypes.guess_extension(content_type)
-			if _extn:
+		if content_type := response.headers.get("Content-Type"):
+			if _extn := mimetypes.guess_extension(content_type):
 				return _extn[1:]
 
 	if extn:
@@ -74,11 +71,11 @@ def get_extension(
 		if "?" in extn:
 			extn = extn.split("?", 1)[0]
 
-		mimetype = mimetypes.guess_type(filename + "." + extn)[0]
+		mimetype = mimetypes.guess_type(f"{filename}.{extn}")[0]
 
 	if mimetype is None or not mimetype.startswith("image/") and content:
 		# detect file extension by reading image header properties
-		extn = imghdr.what(filename + "." + (extn or ""), h=content)
+		extn = imghdr.what(f"{filename}." + (extn or ""), h=content)
 
 	return extn
 
@@ -140,29 +137,30 @@ def get_web_image(file_url: str) -> tuple["ImageFile", str, str]:
 		extn = None
 
 	extn = get_extension(filename, extn, r.content)
-	filename = "/files/" + strip(unquote(filename))
+	filename = f"/files/{strip(unquote(filename))}"
 
 	return image, filename, extn
 
 
 def delete_file(path: str) -> None:
 	"""Delete file from `public folder`"""
-	if path:
-		if ".." in path.split("/"):
-			frappe.throw(
-				_("It is risky to delete this file: {0}. Please contact your System Manager.").format(path)
-			)
+	if not path:
+		return
+	if ".." in path.split("/"):
+		frappe.throw(
+			_("It is risky to delete this file: {0}. Please contact your System Manager.").format(path)
+		)
 
-		parts = os.path.split(path.strip("/"))
-		if parts[0] == "files":
-			path = frappe.utils.get_site_path("public", "files", parts[-1])
+	parts = os.path.split(path.strip("/"))
+	if parts[0] == "files":
+		path = frappe.utils.get_site_path("public", "files", parts[-1])
 
-		else:
-			path = frappe.utils.get_site_path("private", "files", parts[-1])
+	else:
+		path = frappe.utils.get_site_path("private", "files", parts[-1])
 
-		path = encode(path)
-		if os.path.exists(path):
-			os.remove(path)
+	path = encode(path)
+	if os.path.exists(path):
+		os.remove(path)
 
 
 def remove_file_by_url(file_url: str, doctype: str = None, name: str = None) -> "Document":
@@ -273,10 +271,7 @@ def extract_images_from_html(doc: "Document", content: str, is_private: bool = F
 
 
 def get_random_filename(content_type: str = None) -> str:
-	extn = None
-	if content_type:
-		extn = mimetypes.guess_extension(content_type)
-
+	extn = mimetypes.guess_extension(content_type) if content_type else None
 	return random_string(7) + (extn or "")
 
 

@@ -151,10 +151,7 @@ def get_link_type(key):
 
 	link_type_map = {"doctype": "DocType", "page": "Page", "report": "Report"}
 
-	if key in link_type_map:
-		return link_type_map[key]
-
-	return "DocType"
+	return link_type_map.get(key, "DocType")
 
 
 def get_report_type(report):
@@ -193,9 +190,11 @@ def save_page(title, public, new_widgets, blocks):
 	filters = {"public": public, "label": title}
 
 	if not public:
-		filters = {"for_user": frappe.session.user, "label": title + "-" + frappe.session.user}
-	pages = frappe.get_all("Workspace", filters=filters)
-	if pages:
+		filters = {
+			"for_user": frappe.session.user,
+			"label": f"{title}-{frappe.session.user}",
+		}
+	if pages := frappe.get_all("Workspace", filters=filters):
 		doc = frappe.get_doc("Workspace", pages[0])
 
 	doc.content = blocks
@@ -209,9 +208,7 @@ def save_page(title, public, new_widgets, blocks):
 @frappe.whitelist()
 def update_page(name, title, icon, parent, public):
 	public = frappe.parse_json(public)
-	doc = frappe.get_doc("Workspace", name)
-
-	if doc:
+	if doc := frappe.get_doc("Workspace", name):
 		doc.title = title
 		doc.icon = icon
 		doc.parent_page = parent
@@ -225,11 +222,9 @@ def update_page(name, title, icon, parent, public):
 		if name != new_name:
 			rename_doc("Workspace", name, new_name, force=True, ignore_permissions=True)
 
-		# update new name and public in child pages
-		child_docs = frappe.get_all(
+		if child_docs := frappe.get_all(
 			"Workspace", filters={"parent_page": doc.title, "public": doc.public}
-		)
-		if child_docs:
+		):
 			for child in child_docs:
 				child_doc = frappe.get_doc("Workspace", child.name)
 				child_doc.parent_page = doc.title
@@ -356,19 +351,17 @@ def sort_page(workspace_pages, pages):
 
 
 def last_sequence_id(doc):
-	doc_exists = frappe.db.exists(
+	if doc_exists := frappe.db.exists(
 		{"doctype": "Workspace", "public": doc.public, "for_user": doc.for_user}
-	)
-
-	if not doc_exists:
+	):
+		return frappe.get_all(
+			"Workspace",
+			fields=["sequence_id"],
+			filters={"public": doc.public, "for_user": doc.for_user},
+			order_by="sequence_id desc",
+		)[0].sequence_id
+	else:
 		return 0
-
-	return frappe.get_all(
-		"Workspace",
-		fields=["sequence_id"],
-		filters={"public": doc.public, "for_user": doc.for_user},
-		order_by="sequence_id desc",
-	)[0].sequence_id
 
 
 def get_page_list(fields, filters):

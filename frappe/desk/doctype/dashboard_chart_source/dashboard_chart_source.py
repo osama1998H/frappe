@@ -12,11 +12,7 @@ from frappe.modules.export_file import export_to_files
 @frappe.whitelist()
 def get_config(name):
 	doc = frappe.get_doc("Dashboard Chart Source", name)
-	with open(
-		os.path.join(
-			get_module_path(doc.module), "dashboard_chart_source", scrub(doc.name), scrub(doc.name) + ".js"
-		),
-	) as f:
+	with open(os.path.join(get_module_path(doc.module), "dashboard_chart_source", scrub(doc.name), f"{scrub(doc.name)}.js")) as f:
 		return f.read()
 
 

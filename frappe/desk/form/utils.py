@@ -81,21 +81,18 @@ def get_next(doctype, value, prev, filters=None, sort_order="desc", sort_field="
 	# # add condition for next or prev item
 	filters.append([doctype, sort_field, condition, frappe.get_value(doctype, value, sort_field)])
 
-	res = frappe.get_list(
+	if res := frappe.get_list(
 		doctype,
 		fields=["name"],
 		filters=filters,
-		order_by=f"`tab{doctype}`.{sort_field}" + " " + sort_order,
+		order_by=f"`tab{doctype}`.{sort_field} {sort_order}",
 		limit_start=0,
 		limit_page_length=1,
 		as_list=True,
-	)
-
-	if not res:
-		frappe.msgprint(_("No further records"))
-		return None
-	else:
+	):
 		return res[0][0]
+	frappe.msgprint(_("No further records"))
+	return None
 
 
 def get_pdf_link(doctype, docname, print_format="Standard", no_letterhead=0):

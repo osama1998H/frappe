@@ -64,8 +64,8 @@ def get_current_stack_frames():
 
 
 def record(force=False):
-	if __debug__:
-		if frappe.cache().get_value(RECORDER_INTERCEPT_FLAG) or force:
+	if frappe.cache().get_value(RECORDER_INTERCEPT_FLAG) or force:
+		if __debug__:
 			frappe.local._recorder = Recorder()
 
 
@@ -183,11 +183,11 @@ def stop(*args, **kwargs):
 @do_not_record
 @administrator_only
 def get(uuid=None, *args, **kwargs):
-	if uuid:
-		result = frappe.cache().hget(RECORDER_REQUEST_HASH, uuid)
-	else:
-		result = list(frappe.cache().hgetall(RECORDER_REQUEST_SPARSE_HASH).values())
-	return result
+	return (
+		frappe.cache().hget(RECORDER_REQUEST_HASH, uuid)
+		if uuid
+		else list(frappe.cache().hgetall(RECORDER_REQUEST_SPARSE_HASH).values())
+	)
 
 
 @frappe.whitelist()

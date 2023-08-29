@@ -387,7 +387,7 @@ def get_valid_perms(doctype=None, user=None):
 
 	doctypes_with_custom_perms = get_doctypes_with_custom_docperms()
 	for p in perms:
-		if not p.parent in doctypes_with_custom_perms:
+		if p.parent not in doctypes_with_custom_perms:
 			custom_perms.append(p)
 
 	if doctype:
@@ -419,17 +419,16 @@ def get_roles(user=None, with_standard=True):
 	def get():
 		if user == "Administrator":
 			return frappe.get_all("Role", pluck="name")  # return all available roles
-		else:
-			table = DocType("Has Role")
-			roles = (
-				frappe.qb.from_(table)
-				.where(
-					(table.parenttype == "User") & (table.parent == user) & (table.role.notin(["All", "Guest"]))
-				)
-				.select(table.role)
-				.run(pluck=True)
+		table = DocType("Has Role")
+		roles = (
+			frappe.qb.from_(table)
+			.where(
+				(table.parenttype == "User") & (table.parent == user) & (table.role.notin(["All", "Guest"]))
 			)
-			return roles + ["All", "Guest"]
+			.select(table.role)
+			.run(pluck=True)
+		)
+		return roles + ["All", "Guest"]
 
 	roles = frappe.cache().hget("roles", user, get)
 
@@ -471,10 +470,7 @@ def can_set_user_permissions(doctype, docname=None):
 		return False
 
 	# check if current user has a role that can set permission
-	if get_role_permissions(meta).set_user_permissions != 1:
-		return False
-
-	return True
+	return get_role_permissions(meta).set_user_permissions == 1
 
 
 def set_user_permission_if_allowed(doctype, name, user, with_message=False):
@@ -540,12 +536,11 @@ def can_import(doctype, raise_exception=False):
 def can_export(doctype, raise_exception=False):
 	if "System Manager" in frappe.get_roles():
 		return True
-	else:
-		role_permissions = frappe.permissions.get_role_permissions(doctype)
-		has_access = role_permissions.get("export") or role_permissions.get("if_owner").get("export")
-		if not has_access and raise_exception:
-			raise frappe.PermissionError(_("You are not allowed to export {} doctype").format(doctype))
-		return has_access
+	role_permissions = frappe.permissions.get_role_permissions(doctype)
+	has_access = role_permissions.get("export") or role_permissions.get("if_owner").get("export")
+	if not has_access and raise_exception:
+		raise frappe.PermissionError(_("You are not allowed to export {} doctype").format(doctype))
+	return has_access
 
 
 def update_permission_property(doctype, role, permlevel, ptype, value=None, validate=True):
@@ -645,8 +640,7 @@ def allow_everything():
 	returns a dict with access to everything
 	eg. {"read": 1, "write": 1, ...}
 	"""
-	perm = {ptype: 1 for ptype in rights}
-	return perm
+	return {ptype: 1 for ptype in rights}
 
 
 def get_allowed_docs_for_doctype(user_permissions, doctype):

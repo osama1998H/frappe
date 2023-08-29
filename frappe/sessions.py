@@ -89,10 +89,12 @@ def delete_session(sid=None, user=None, reason="Session Expired"):
 	frappe.cache().hdel("last_db_session_update", sid)
 	if sid and not user:
 		table = DocType("Sessions")
-		user_details = (
-			frappe.qb.from_(table).where(table.sid == sid).select(table.user).run(as_dict=True)
-		)
-		if user_details:
+		if user_details := (
+			frappe.qb.from_(table)
+			.where(table.sid == sid)
+			.select(table.user)
+			.run(as_dict=True)
+		):
 			user = user_details[0].get("user")
 
 	logout_feed(user, reason)
@@ -219,18 +221,13 @@ class Session:
 		if resume:
 			self.resume()
 
-		else:
-			if self.user:
-				self.start()
+		elif self.user:
+			self.start()
 
 	def start(self):
 		"""start a new session"""
 		# generate sid
-		if self.user == "Guest":
-			sid = "Guest"
-		else:
-			sid = frappe.generate_hash()
-
+		sid = "Guest" if self.user == "Guest" else frappe.generate_hash()
 		self.data.user = self.user
 		self.data.sid = sid
 		self.data.data.user = self.user
@@ -283,9 +280,7 @@ class Session:
 		import frappe
 		from frappe.auth import validate_ip_address
 
-		data = self.get_session_record()
-
-		if data:
+		if data := self.get_session_record():
 			self.data.update({"data": data, "user": data.user, "sid": self.sid})
 			self.user = data.user
 			validate_ip_address(self.user)
@@ -339,17 +334,16 @@ class Session:
 
 	def get_session_data_from_db(self):
 		sessions = DocType("Sessions")
-		rec = frappe.db.get_values(
+		if rec := frappe.db.get_values(
 			sessions,
 			filters=(sessions.sid == self.sid)
 			& (
-				PseudoColumn(f"({Now()} - {sessions.lastupdate.get_sql()})") < get_expiry_period_for_query()
+				PseudoColumn(f"({Now()} - {sessions.lastupdate.get_sql()})")
+				< get_expiry_period_for_query()
 			),
 			fieldname=["user", "sessiondata"],
 			order_by=None,
-		)
-
-		if rec:
+		):
 			data = frappe._dict(frappe.safe_eval(rec and rec[0][1] or "{}"))
 			data.user = rec[0][0]
 		else:
@@ -426,7 +420,7 @@ def get_expiry_period():
 
 	# incase seconds is missing
 	if len(exp_sec.split(":")) == 2:
-		exp_sec = exp_sec + ":00"
+		exp_sec = f"{exp_sec}:00"
 
 	return exp_sec
 
@@ -440,15 +434,10 @@ def get_geo_from_ip(ip_addr):
 			data = reader.get(ip_addr)
 
 			return frappe._dict(data)
-	except ImportError:
-		return
-	except ValueError:
-		return
-	except TypeError:
+	except (ImportError, ValueError, TypeError):
 		return
 
 
 def get_geo_ip_country(ip_addr):
-	match = get_geo_from_ip(ip_addr)
-	if match:
+	if match := get_geo_from_ip(ip_addr):
 		return match.country

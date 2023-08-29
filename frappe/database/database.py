@@ -290,21 +290,21 @@ class Database:
 		_query = None
 
 		if frappe.conf.allow_tests and frappe.cache().get_value("flag_print_sql"):
-			_query = _query or str(mogrified_query)
+			_query = _query or mogrified_query
 			print(_query)
 
 		if debug:
-			_query = _query or str(mogrified_query)
+			_query = _query or mogrified_query
 			if explain and is_query_type(_query, "select"):
 				self.explain_query(_query)
 			frappe.errprint(_query)
 
 		if frappe.conf.logging == 2:
-			_query = _query or str(mogrified_query)
+			_query = _query or mogrified_query
 			frappe.log(f"<<<< query\n{_query}\n>>>>")
 
 		if frappe.flags.in_migrate:
-			_query = _query or str(mogrified_query)
+			_query = _query or mogrified_query
 			self.log_touched_tables(_query)
 
 	def log_query(
@@ -409,7 +409,7 @@ class Database:
 	@staticmethod
 	def convert_to_lists(res):
 		"""Convert tuple output to lists (internal)."""
-		return [[value for value in row] for row in res]
+		return [list(row) for row in res]
 
 	def get(self, doctype, filters=None, as_dict=True, cache=False):
 		"""Returns `get_value` with fieldname='*'"""
@@ -480,10 +480,7 @@ class Database:
 
 		row = result[0]
 
-		if len(row) > 1 or as_dict:
-			return row
-		# single field is requested, send it without wrapping in containers
-		return row[0]
+		return row if len(row) > 1 or as_dict else row[0]
 
 	def get_values(
 		self,
@@ -617,7 +614,7 @@ class Database:
 						return []
 
 			if as_dict:
-				return values and [values] or []
+				return [values] if values else []
 
 			if isinstance(fields, list):
 				return [map(values.get, fields)]
@@ -632,16 +629,14 @@ class Database:
 
 			if not run:
 				return r
-			if as_dict:
-				if r:
-					r = frappe._dict(r)
-					if update:
-						r.update(update)
-					return [r]
-				else:
-					return []
-			else:
-				return r and [[i[1] for i in r]] or []
+			if not as_dict:
+				return [[i[1] for i in r]] if r else []
+			if not r:
+				return []
+			r = frappe._dict(r)
+			if update:
+				r.update(update)
+			return [r]
 
 	def get_singles_dict(self, doctype, debug=False, *, for_update=False, cast=False):
 		"""Get Single DocType as dict.
@@ -937,10 +932,7 @@ class Database:
 		if not key:
 			return defaults
 
-		if key in defaults:
-			return defaults[key]
-
-		return defaults.get(frappe.scrub(key))
+		return defaults[key] if key in defaults else defaults.get(frappe.scrub(key))
 
 	def begin(self, *, read_only=False):
 		read_only = read_only or frappe.flags.read_only
@@ -1072,7 +1064,7 @@ class Database:
 
 		if isinstance(datetime, str):
 			if ":" not in datetime:
-				datetime = datetime + " 00:00:00.000000"
+				datetime = f"{datetime} 00:00:00.000000"
 		else:
 			datetime = datetime.strftime("%Y-%m-%d %H:%M:%S.%f")
 
@@ -1113,10 +1105,10 @@ class Database:
 
 	def get_table_columns(self, doctype):
 		"""Returns list of column names from given doctype."""
-		columns = self.get_db_table_columns("tab" + doctype)
-		if not columns:
+		if columns := self.get_db_table_columns(f"tab{doctype}"):
+			return columns
+		else:
 			raise self.TableMissingError("DocType", doctype)
-		return columns
 
 	def has_column(self, doctype, column):
 		"""Returns True if column exists in database."""
@@ -1211,8 +1203,9 @@ class Database:
 		return self.sql_ddl(f"truncate `{get_table_name(doctype)}`")
 
 	def get_last_created(self, doctype):
-		last_record = self.get_all(doctype, ("creation"), limit=1, order_by="creation desc")
-		if last_record:
+		if last_record := self.get_all(
+			doctype, ("creation"), limit=1, order_by="creation desc"
+		):
 			return get_datetime(last_record[0].creation)
 		else:
 			return None

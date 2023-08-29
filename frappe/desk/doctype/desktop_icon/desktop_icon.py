@@ -217,13 +217,10 @@ def set_order(new_order, user=None):
 				icon = get_user_copy(module_name, user)
 			else:
 				name = frappe.db.get_value("Desktop Icon", {"standard": 1, "module_name": module_name})
-				if name:
-					icon = frappe.get_doc("Desktop Icon", name)
-				else:
+				if not name:
 					# standard icon missing, create one for DocType
 					name = add_user_icon(module_name, standard=1)
-					icon = frappe.get_doc("Desktop Icon", name)
-
+				icon = frappe.get_doc("Desktop Icon", name)
 			icon.db_set("idx", i)
 
 	clear_desktop_icons_cache()
@@ -244,20 +241,17 @@ def set_desktop_icons(visible_list, ignore_duplicate=True):
 
 	# set as visible if present, or add icon
 	for module_name in visible_list:
-		name = frappe.db.get_value("Desktop Icon", {"module_name": module_name})
-		if name:
+		if name := frappe.db.get_value("Desktop Icon", {"module_name": module_name}):
 			frappe.db.set_value("Desktop Icon", name, "hidden", 0)
-		else:
-			if frappe.db.exists("DocType", module_name):
-				try:
-					add_user_icon(module_name, standard=1)
-				except frappe.UniqueValidationError as e:
-					if not ignore_duplicate:
-						raise e
-					else:
-						visible_list.remove(module_name)
-						if frappe.message_log:
-							frappe.message_log.pop()
+		elif frappe.db.exists("DocType", module_name):
+			try:
+				add_user_icon(module_name, standard=1)
+			except frappe.UniqueValidationError as e:
+				if not ignore_duplicate:
+					raise e
+				visible_list.remove(module_name)
+				if frappe.message_log:
+					frappe.message_log.pop()
 
 	# set the order
 	set_order(visible_list)
@@ -326,11 +320,9 @@ def get_user_copy(module_name, user=None):
 	if not user:
 		user = frappe.session.user
 
-	desktop_icon_name = frappe.db.get_value(
+	if desktop_icon_name := frappe.db.get_value(
 		"Desktop Icon", {"module_name": module_name, "owner": user, "standard": 0}
-	)
-
-	if desktop_icon_name:
+	):
 		return frappe.get_doc("Desktop Icon", desktop_icon_name)
 	else:
 		return make_user_copy(module_name, user)
@@ -379,7 +371,7 @@ def sync_desktop_icons():
 def sync_from_app(app):
 	"""Sync desktop icons from app. To be called during install"""
 	try:
-		modules = frappe.get_attr(app + ".config.desktop.get_data")() or {}
+		modules = frappe.get_attr(f"{app}.config.desktop.get_data")() or {}
 	except ImportError:
 		return []
 
@@ -392,10 +384,10 @@ def sync_from_app(app):
 		modules_list = modules
 
 	for i, m in enumerate(modules_list):
-		desktop_icon_name = frappe.db.get_value(
-			"Desktop Icon", {"module_name": m["module_name"], "app": app, "standard": 1}
-		)
-		if desktop_icon_name:
+		if desktop_icon_name := frappe.db.get_value(
+			"Desktop Icon",
+			{"module_name": m["module_name"], "app": app, "standard": 1},
+		):
 			desktop_icon = frappe.get_doc("Desktop Icon", desktop_icon_name)
 		else:
 			# new icon

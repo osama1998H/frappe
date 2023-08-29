@@ -24,8 +24,7 @@ def fetch_pr_data(pr_number, repo, endpoint=""):
 def req(url):
 	"Simple resilient request call to handle rate limits."
 	headers = None
-	token = os.environ.get("GITHUB_TOKEN")
-	if token:
+	if token := os.environ.get("GITHUB_TOKEN"):
 		headers = {"authorization": f"Bearer {token}"}
 
 	retries = 0
@@ -65,11 +64,9 @@ def has_run_ui_tests_label(pr_number, repo="frappe/frappe"):
 
 def has_label(pr_number, label, repo="frappe/frappe"):
 	return any(
-		[
-			fetched_label["name"]
-			for fetched_label in fetch_pr_data(pr_number, repo)["labels"]
-			if fetched_label["name"] == label
-		]
+		fetched_label["name"]
+		for fetched_label in fetch_pr_data(pr_number, repo)["labels"]
+		if fetched_label["name"] == label
 	)
 
 

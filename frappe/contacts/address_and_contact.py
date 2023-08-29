@@ -90,9 +90,7 @@ def has_permission(doc, ptype, user):
 		if name and frappe.has_permission(doctype, ptype, doc=name):
 			return True
 
-	if not any(names):
-		return True
-	return False
+	return not any(names)
 
 
 def get_permission_query_conditions_for_contact(user):
@@ -111,22 +109,17 @@ def get_permission_query_conditions(doctype):
 		return ""
 
 	elif not links.get("permitted_links"):
-		conditions = []
-
-		# when everything is not permitted
-		for df in links.get("not_permitted_links"):
-			# like ifnull(customer, '')='' and ifnull(supplier, '')=''
-			conditions.append(f"ifnull(`tab{doctype}`.`{df.fieldname}`, '')=''")
-
+		conditions = [
+			f"ifnull(`tab{doctype}`.`{df.fieldname}`, '')=''"
+			for df in links.get("not_permitted_links")
+		]
 		return "( " + " and ".join(conditions) + " )"
 
 	else:
-		conditions = []
-
-		for df in links.get("permitted_links"):
-			# like ifnull(customer, '')!='' or ifnull(supplier, '')!=''
-			conditions.append(f"ifnull(`tab{doctype}`.`{df.fieldname}`, '')!=''")
-
+		conditions = [
+			f"ifnull(`tab{doctype}`.`{df.fieldname}`, '')!=''"
+			for df in links.get("permitted_links")
+		]
 		return "( " + " or ".join(conditions) + " )"
 
 

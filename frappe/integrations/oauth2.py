@@ -72,11 +72,7 @@ def approve(*args, **kwargs):
 
 @frappe.whitelist(allow_guest=True)
 def authorize(**kwargs):
-	success_url = "/api/method/frappe.integrations.oauth2.approve?" + encode_params(
-		sanitize_kwargs(kwargs)
-	)
-	failure_url = frappe.form_dict["redirect_uri"] + "?error=access_denied"
-
+	success_url = f"/api/method/frappe.integrations.oauth2.approve?{encode_params(sanitize_kwargs(kwargs))}"
 	if frappe.session.user == "Guest":
 		# Force login, redirect to preauth again.
 		frappe.local.response["type"] = "redirect"
@@ -84,6 +80,8 @@ def authorize(**kwargs):
 			{"redirect-to": frappe.request.url}
 		)
 	else:
+		failure_url = frappe.form_dict["redirect_uri"] + "?error=access_denied"
+
 		try:
 			r = frappe.request
 			(scopes, frappe.flags.oauth_credentials,) = get_oauth_server().validate_authorization_request(
@@ -224,13 +222,11 @@ def introspect_token(token=None, token_type_hint=None):
 		)
 
 		if "openid" in bearer_token.scopes:
-			sub = frappe.get_value(
+			if sub := frappe.get_value(
 				"User Social Login",
 				{"provider": "frappe", "parent": bearer_token.user},
 				"userid",
-			)
-
-			if sub:
+			):
 				token_response.update({"sub": sub})
 				user = frappe.get_doc("User", bearer_token.user)
 				userinfo = get_userinfo(user)

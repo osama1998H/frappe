@@ -25,10 +25,7 @@ def get_new_doc(doctype, parent_doc=None, parentfield=None, as_dict=False):
 
 	set_dynamic_default_values(doc, parent_doc, parentfield)
 
-	if as_dict:
-		return doc
-	else:
-		return frappe.get_doc(doc)
+	return doc if as_dict else frappe.get_doc(doc)
 
 
 def make_new_doc(doctype):
@@ -65,16 +62,16 @@ def set_user_and_static_default_values(doc):
 			user_default_value = get_user_default_value(
 				df, defaults, doctype_user_permissions, allowed_records, default_doc
 			)
-			if user_default_value is not None:
-				# if fieldtype is link check if doc exists
-				if not df.fieldtype == "Link" or frappe.db.exists(df.options, user_default_value):
-					doc.set(df.fieldname, user_default_value)
-
-			else:
+			if user_default_value is None:
 				if df.fieldname != doc.meta.title_field:
 					static_default_value = get_static_default_value(df, doctype_user_permissions, allowed_records)
 					if static_default_value is not None:
 						doc.set(df.fieldname, static_default_value)
+
+			elif df.fieldtype != "Link" or frappe.db.exists(
+				df.options, user_default_value
+			):
+				doc.set(df.fieldname, user_default_value)
 
 
 def get_user_default_value(df, defaults, doctype_user_permissions, allowed_records, default_doc):
